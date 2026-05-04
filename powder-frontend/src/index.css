@@ -1,0 +1,35 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Make CodeMirror blend perfectly into the background */
+.powder-editor .cm-editor {
+  background-color: transparent !important;
+}
+
+/* Remove the ugly blue outline when you click inside the editor */
+.powder-editor .cm-focused {
+  outline: none !important;
+}
+
+/* Make the text cursor white and slightly thicker */
+.powder-editor .cm-cursor {
+  border-left-color: #ffffff !important;
+  border-left-width: 2px !important;
+}
+
+/* Tweak the text color to be a soft, readable gray/white */
+.powder-editor .cm-content {
+  color: #c9d1d9;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+}
+
+/* Force CodeMirror headers to actually be large! */
+.powder-editor .cm-line {
+  padding-bottom: 2px;
+}
