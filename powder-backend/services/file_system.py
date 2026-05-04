@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,10 +43,16 @@ def save_note_content(file_path: str, content: str) -> str:
 
 
 def get_file_tree(current_dir: Path = VAULT_DIR, base_dir: Path = VAULT_DIR) -> dict:
+    if isinstance(current_dir, str):
+        current_dir = Path(current_dir)
+
+    rel_path = "" if current_dir == VAULT_DIR else str(current_dir.relative_to(VAULT_DIR)).replace("\\", "/")
+
     """Recursively builds a tree structure of the vault."""
     tree = {
-        "name": current_dir.name if current_dir != base_dir else "vault",
+        "name": "Vault" if current_dir == base_dir else current_dir.name,
         "type": "folder",
+        "path": rel_path,
         "children": []
     }
 
@@ -71,3 +78,56 @@ def get_file_tree(current_dir: Path = VAULT_DIR, base_dir: Path = VAULT_DIR) -> 
         pass  # Silently skip any folders the system won't let us read
 
     return tree
+
+
+def create_folder(folder_path: str) -> str:
+    """Creates a new empty directory."""
+    target_dir = VAULT_DIR / folder_path
+
+    # Security check
+    if not str(target_dir.resolve()).startswith(str(VAULT_DIR.resolve())):
+        raise PermissionError("Access denied.")
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return folder_path
+
+
+def delete_item(item_path: str) -> bool:
+    """Deletes a file or an entire folder."""
+    target = VAULT_DIR / item_path
+
+    if not str(target.resolve()).startswith(str(VAULT_DIR.resolve())):
+        raise PermissionError("Access denied.")
+
+    if not target.exists():
+        raise FileNotFoundError("Item not found.")
+
+    if target.is_file():
+        target.unlink()  # Deletes a file
+    elif target.is_dir():
+        shutil.rmtree(target)  # Deletes a folder and everything inside it
+
+    return True
+
+
+def move_item(source_path: str, destination_path: str) -> bool:
+    """Moves a file or folder into a new directory."""
+    src = VAULT_DIR / source_path
+
+    # If destination_path is "", it means they dropped it on the root "Vault"
+    dst_dir = VAULT_DIR / destination_path
+
+    # Security: Ensure they aren't escaping the Vault
+    if not str(src.resolve()).startswith(str(VAULT_DIR.resolve())) or \
+            not str(dst_dir.resolve()).startswith(str(VAULT_DIR.resolve())):
+        raise PermissionError("Access denied.")
+
+    if not src.exists():
+        raise FileNotFoundError("Source item not found.")
+
+    # Security: Prevent dropping a folder into itself
+    if str(dst_dir.resolve()).startswith(str(src.resolve())):
+        raise ValueError("Cannot move a folder into itself.")
+
+    shutil.move(str(src), str(dst_dir))
+    return True

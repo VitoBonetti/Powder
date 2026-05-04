@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from models.schemas import NoteData
+from models.schemas import NoteData, MoveData
 from services import file_system
 
 router = APIRouter()
@@ -33,3 +33,32 @@ def get_tree():
     """Returns the nested file tree for the frontend sidebar."""
     tree = file_system.get_file_tree()
     return tree
+
+
+@router.post("/folders/{folder_path:path}")
+def create_new_folder(folder_path: str):
+    try:
+        file_system.create_folder(folder_path)
+        return {"message": f"Folder '{folder_path}' created."}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+@router.delete("/notes/{file_path:path}")
+def delete_vault_item(file_path: str):
+    try:
+        file_system.delete_item(file_path)
+        return {"message": "Deleted successfully."}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+@router.put("/move")
+def move_vault_item(data: MoveData):
+    try:
+        file_system.move_item(data.source, data.destination)
+        return {"message": "Moved successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

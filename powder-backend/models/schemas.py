@@ -5,3 +5,7 @@ from pydantic import BaseModel
 class NoteData(BaseModel):
     content: str
 
+
+class MoveData(BaseModel):
+    source: str
+    destination: str
