@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import time
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -56,26 +57,27 @@ def get_file_tree(current_dir: Path = VAULT_DIR, base_dir: Path = VAULT_DIR) -> 
         "children": []
     }
 
+    ALLOWED_EXTENSIONS = {".md", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
     # Read the directory contents
     try:
-        # Sort so folders appear first, then files alphabetically
-        paths = sorted(current_dir.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        # Sort folders first, then files
+        paths = sorted(current_dir.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        for child in paths:
+            # Hide system folders/files (like .git or .DS_Store)
+            if child.name.startswith("."):
+                continue
 
-        for path in paths:
-            if path.is_file() and path.suffix == ".md":
-                # It's a Markdown file
+            if child.is_dir():
+                tree["children"].append(get_file_tree(child))
+            elif child.is_file() and child.suffix.lower() in ALLOWED_EXTENSIONS:
                 tree["children"].append({
-                    "name": path.name,
+                    "name": child.name,
                     "type": "file",
-                    # Convert Windows backslashes to standard URL forward slashes
-                    "path": str(path.relative_to(base_dir)).replace("\\", "/")
+                    "path": str(child.relative_to(VAULT_DIR)).replace("\\", "/")
                 })
-            elif path.is_dir():
-                # It's a folder! Recursively call this exact function to dig inside
-                tree["children"].append(get_file_tree(path, base_dir))
-
     except PermissionError:
-        pass  # Silently skip any folders the system won't let us read
+        pass
 
     return tree
 
@@ -200,3 +202,19 @@ def search_vault(query: str) -> list:
 
     return results
 
+
+def save_asset(filename: str, content: bytes) -> str:
+    """Saves an image to the assets folder and returns the relative path."""
+    assets_dir = VAULT_DIR / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    # Add a timestamp to the filename to prevent overwriting
+    safe_filename = f"{int(time.time())}_{filename.replace(' ', '_')}"
+    file_path = assets_dir / safe_filename
+
+    # Write the bytes to the hard drive
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Return the exact path that the Markdown file will use
+    return f"assets/{safe_filename}"

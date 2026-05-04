@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon } from 'lucide-react';
 
 // --- CUSTOM MODAL COMPONENT ---
 // (We made actionLabel optional so we can have buttons inside the modal instead of at the bottom)
@@ -54,13 +54,18 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
   );
 };
 
-// --- Updated TreeNode with Import Button ---
+// --- Updated TreeNode with System Folder Protection ---
 const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const isFolder = node.type === 'folder';
   const isRoot = node.name === "Vault";
+
+  // NEW: Identify System Folders & Files
+  const isAssetsRoot = node.path === "assets"; // The main assets folder
+  const isAssetFolder = node.path === "assets" || node.path?.startsWith("assets/"); // Assets folder or any subfolder inside it
+  const isImageFile = !isFolder && node.name.match(/\.(png|jpe?g|gif|webp|svg)$/i);
 
   const handleDragStart = (e) => {
     e.stopPropagation();
@@ -108,7 +113,12 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
         onClick={() => onFileSelect(node.path)}
       >
         <div className="flex items-center truncate">
-          <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
+          {/* NEW: Show different icons for Images vs Text */}
+          {isImageFile ? (
+            <ImageIcon className="w-4 h-4 mr-2 text-purple-400 flex-shrink-0" />
+          ) : (
+            <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
+          )}
           <span className="truncate">{node.name}</span>
         </div>
         <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mr-2" />
@@ -121,8 +131,8 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   return (
     <div>
       <div
-        draggable={!isRoot}
-        onDragStart={!isRoot ? handleDragStart : undefined}
+        draggable={!isRoot && !isAssetsRoot} // Don't allow dragging the root assets folder
+        onDragStart={(!isRoot && !isAssetsRoot) ? handleDragStart : undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -133,17 +143,29 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
       >
         <div className="flex items-center truncate">
           {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
-          <Folder className="w-4 h-4 mr-2 text-blue-400 flex-shrink-0" />
+
+          {/* Turn the Assets folder icon purple so it stands out as a system folder */}
+          <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${isAssetsRoot ? 'text-purple-500' : 'text-blue-400'}`} />
           <span className="truncate">{node.name}</span>
         </div>
 
         <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2">
-          {/* NEW: Import Button */}
-          <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
 
-          <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5" /></button>
+          {/* ONLY show Import and New Note if it's NOT an asset folder */}
+          {!isAssetFolder && (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5" /></button>
+            </>
+          )}
+
+          {/* ALWAYS allow creating Subfolders (so you can organize images) */}
           <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5" /></button>
-          {!isRoot && <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" title="Delete" />}
+
+          {/* Prevent deleting the Root Vault and the Root Assets folder */}
+          {!isRoot && !isAssetsRoot && (
+            <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" title="Delete" />
+          )}
         </div>
       </div>
 
@@ -158,7 +180,6 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   );
 };
 
-// --- Main Sidebar Component ---
 // --- Main Sidebar Component ---
 export default function Sidebar({ onFileSelect }) {
   const [tree, setTree] = useState(null);

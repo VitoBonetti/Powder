@@ -93,3 +93,18 @@ def global_search(q: str = ""):
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-asset")
+async def upload_asset_file(file: UploadFile = File(...)):
+    try:
+        # Ensure they are only uploading images
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image.")
+
+        content = await file.read()
+        path = file_system.save_asset(file.filename, content)
+
+        return {"message": "Asset saved", "path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

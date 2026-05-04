@@ -9,6 +9,7 @@ import { tags as t } from '@lezer/highlight';
 import ReactMarkdown from 'react-markdown';
 import { Eye, Edit3, CheckCircle2, Loader2, Search, FileText } from 'lucide-react';
 import mermaid from 'mermaid';
+import { EditorView } from '@codemirror/view';
 
 const customMarkdownStyle = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#60a5fa" },
@@ -45,6 +46,70 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const searchInputRef = useRef(null);
+
+  // Check if the currently selected file is an image
+  const isImageFile = activeFile && activeFile.match(/\.(png|jpe?g|gif|webp|svg)$/i);
+
+  // --- IMAGE UPLOAD LOGIC ---
+  const uploadImage = (file, view, pos) => {
+    // 1. Insert a temporary loading placeholder at the cursor
+    const placeholder = `\n![Uploading ${file.name}...]()\n`;
+    view.dispatch({ changes: { from: pos, insert: placeholder } });
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('http://127.0.0.1:8000/api/upload-asset', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      // 2. Find the placeholder text and replace it with the real Markdown path
+      const currentDoc = view.state.doc.toString();
+      const placeholderIndex = currentDoc.indexOf(placeholder);
+
+      if (placeholderIndex !== -1) {
+        view.dispatch({
+          changes: {
+            from: placeholderIndex,
+            to: placeholderIndex + placeholder.length,
+            insert: `\n![${file.name}](${data.path})\n`
+          }
+        });
+      }
+    })
+    .catch(err => console.error("Image upload failed:", err));
+  };
+
+  const imageDropAndPasteHandler = EditorView.domEventHandlers({
+    paste(event, view) {
+      const items = event.clipboardData?.items;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          event.preventDefault();
+          const file = item.getAsFile();
+          uploadImage(file, view, view.state.selection.main.head);
+          return true; // Stop the default text paste
+        }
+      }
+      return false;
+    },
+    drop(event, view) {
+      const items = event.dataTransfer?.files;
+      if (items && items.length > 0) {
+        for (const file of items) {
+          if (file.type.startsWith("image/")) {
+            event.preventDefault();
+            const pos = view.posAtCoords({x: event.clientX, y: event.clientY});
+            uploadImage(file, view, pos ? pos : view.state.selection.main.head);
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+  });
 
   // --- 1. THE CTRL+K INTERCEPTOR ---
   useEffect(() => {
@@ -96,6 +161,12 @@ function App() {
   // File Loading Effect
   useEffect(() => {
     if (!activeFile) return;
+
+    if (isImageFile) {
+      setSaveStatus("saved");
+      return;
+    }
+
     fetch(`http://127.0.0.1:8000/api/notes/${activeFile}`)
       .then(res => res.json())
       .then(data => {
@@ -103,7 +174,7 @@ function App() {
         setSaveStatus("saved");
       })
       .catch(err => console.error("Error loading note:", err));
-  }, [activeFile]);
+  }, [activeFile, isImageFile]);
 
   // Auto-Save Effect
   useEffect(() => {
@@ -162,17 +233,34 @@ function App() {
               <div className="h-full flex items-center justify-center text-gray-500">
                 Select a note from the sidebar to start writing.
               </div>
+            ) : isImageFile ? (
+              // --- NEW: THE IMAGE VIEWER ---
+              <div className="h-full flex flex-col items-center justify-center pb-20">
+                <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
+                  <img
+                    src={`http://127.0.0.1:8000/${activeFile}`}
+                    alt={activeFile}
+                    className="max-w-full max-h-[70vh] object-contain rounded-md"
+                  />
+                </div>
+                <p className="mt-4 text-gray-500 text-sm font-mono">{activeFile}</p>
+              </div>
             ) : isPreview ? (
+              // --- THE READING VIEW ---
               <div className="prose prose-invert prose-lg max-w-none pb-20">
                 <ReactMarkdown
                   components={{
+                    img({node, src, alt, ...props}) {
+                      const fullSrc = src.startsWith('http') ? src : `http://127.0.0.1:8000/${src}`;
+                      return <img src={fullSrc} alt={alt} className="rounded-lg shadow-md border border-gray-700 max-w-full h-auto my-6" {...props} />;
+                    },
                     code({node, inline, className, children, ...props}) {
-                      const match = /language-(\w+)/.exec(className || '')
+                      const match = /language-(\w+)/.exec(className || '');
                       const isMermaid = match && match[1] === 'mermaid';
                       if (!inline && isMermaid) {
-                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
+                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
                       }
-                      return <code className={className} {...props}>{children}</code>
+                      return <code className={className} {...props}>{children}</code>;
                     }
                   }}
                 >
@@ -180,12 +268,14 @@ function App() {
                 </ReactMarkdown>
               </div>
             ) : (
+              // --- THE CODE MIRROR EDITOR ---
               <CodeMirror
                 value={content}
                 theme={vscodeDark}
                 extensions={[
                   markdown({ base: markdownLanguage, codeLanguages: languages }),
-                  syntaxHighlighting(customMarkdownStyle)
+                  syntaxHighlighting(customMarkdownStyle),
+                  imageDropAndPasteHandler
                 ]}
                 onChange={(value) => setContent(value)}
                 className="text-lg powder-editor pb-20"

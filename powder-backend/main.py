@@ -1,8 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from api.routes import router as api_router
+from services.file_system import VAULT_DIR
 
 app = FastAPI(title="Powder Backend")
+
+(VAULT_DIR / "assets").mkdir(parents=True, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=VAULT_DIR / "assets"), name="assets")
 
 app.add_middleware(
     CORSMiddleware,
