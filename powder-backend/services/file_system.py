@@ -155,3 +155,48 @@ def save_uploaded_file(target_directory: str, filename: str, content: bytes) -> 
         f.write(content)
 
     return str(file_path.relative_to(VAULT_DIR)).replace("\\", "/")
+
+
+def search_vault(query: str) -> list:
+    """Scans all markdown files for the given query and returns snippets."""
+    results = []
+    if not query or not query.strip():
+        return results
+
+    query_lower = query.lower()
+
+    # .rglob("*.md") recursively finds all markdown files in all subfolders
+    for md_file in VAULT_DIR.rglob("*.md"):
+        try:
+            # Read the file content
+            content = md_file.read_text(encoding="utf-8")
+
+            # Case-insensitive search
+            if query_lower in content.lower():
+                # Find exactly where the match happened
+                match_index = content.lower().find(query_lower)
+
+                # Grab 40 characters before and after the match for context
+                start = max(0, match_index - 40)
+                end = min(len(content), match_index + len(query) + 40)
+
+                # Clean up the snippet so it's a single flat line
+                snippet = content[start:end].replace('\n', ' ')
+
+                if start > 0:
+                    snippet = "..." + snippet
+                if end < len(content):
+                    snippet = snippet + "..."
+
+                results.append({
+                    "name": md_file.name,
+                    "path": str(md_file.relative_to(VAULT_DIR)).replace("\\", "/"),
+                    "snippet": snippet
+                })
+        except Exception as e:
+            # If one file is corrupted, skip it and keep searching the rest
+            print(f"Error reading {md_file}: {e}")
+            continue
+
+    return results
+

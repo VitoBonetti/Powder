@@ -83,3 +83,13 @@ async def upload_files(
         return {"message": "Successfully uploaded files.", "files": saved_files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.get("/search")
+def global_search(q: str = ""):
+    """Takes a query string 'q' and returns matching files and snippets."""
+    try:
+        results = file_system.search_vault(q)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
