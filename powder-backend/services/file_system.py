@@ -112,14 +112,28 @@ def delete_item(item_path: str) -> bool:
     return True
 
 
-def move_item(source_path: str, destination_path: str) -> bool:
-    """Moves a file or folder into a new directory."""
-    src = VAULT_DIR / source_path
+def update_links(old_path: str, new_path: str):
+    """Silently scans all markdown files and updates broken links."""
+    old_link = old_path.replace("\\", "/")
+    new_link = new_path.replace("\\", "/")
 
-    # If destination_path is "", it means they dropped it on the root "Vault"
+    # Recursively find every .md file
+    for md_file in VAULT_DIR.rglob("*.md"):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            # If the old link exists in this file, replace it and save it!
+            if old_link in content:
+                new_content = content.replace(old_link, new_link)
+                md_file.write_text(new_content, encoding="utf-8")
+        except Exception as e:
+            print(f"Error updating links in {md_file}: {e}")
+
+
+def move_item(source_path: str, destination_path: str) -> bool:
+    """Moves a file or folder into a new directory and updates links."""
+    src = VAULT_DIR / source_path
     dst_dir = VAULT_DIR / destination_path
 
-    # Security: Ensure they aren't escaping the Vault
     if not str(src.resolve()).startswith(str(VAULT_DIR.resolve())) or \
             not str(dst_dir.resolve()).startswith(str(VAULT_DIR.resolve())):
         raise PermissionError("Access denied.")
@@ -127,11 +141,20 @@ def move_item(source_path: str, destination_path: str) -> bool:
     if not src.exists():
         raise FileNotFoundError("Source item not found.")
 
-    # Security: Prevent dropping a folder into itself
     if str(dst_dir.resolve()).startswith(str(src.resolve())):
         raise ValueError("Cannot move a folder into itself.")
 
+    # --- NEW: Calculate the old and new paths BEFORE we move it ---
+    old_rel = str(src.relative_to(VAULT_DIR)).replace("\\", "/")
+    new_file_path = dst_dir / src.name
+    new_rel = str(new_file_path.relative_to(VAULT_DIR)).replace("\\", "/")
+
+    # Move the file on the hard drive
     shutil.move(str(src), str(dst_dir))
+
+    # --- NEW: Trigger the link updater silently in the background ---
+    update_links(old_rel, new_rel)
+
     return True
 
 

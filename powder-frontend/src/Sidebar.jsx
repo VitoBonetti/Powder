@@ -90,9 +90,41 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 
     if (!isFolder) return;
 
-    const sourcePath = e.dataTransfer.getData('sourcePath');
     const destPath = isRoot ? "" : node.path;
 
+    // --- NEW: 1. HANDLE EXTERNAL DESKTOP DRAG & DROP ---
+    // If files are present, it means it came from outside the browser!
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+
+      const formDataMd = new FormData();
+      formDataMd.append('target_path', destPath);
+      let hasMd = false;
+
+      files.forEach(file => {
+        if (file.type.startsWith("image/")) {
+          // Send images straight to the global assets folder
+          const imgData = new FormData();
+          imgData.append('file', file);
+          fetch('http://127.0.0.1:8000/api/upload-asset', { method: 'POST', body: imgData })
+            .then(() => refreshTree());
+        } else if (file.name.endsWith(".md")) {
+          // Send Markdown files to the specific folder we hovered over
+          formDataMd.append('files', file, file.name);
+          hasMd = true;
+        }
+      });
+
+      // Upload the markdown batch if we found any
+      if (hasMd) {
+        fetch('http://127.0.0.1:8000/api/upload', { method: 'POST', body: formDataMd })
+          .then(() => refreshTree());
+      }
+      return; // Stop the function here so internal move logic doesn't fire
+    }
+
+    // --- 2. HANDLE INTERNAL FILE MOVING (Your existing code) ---
+    const sourcePath = e.dataTransfer.getData('sourcePath');
     if (!sourcePath || sourcePath === destPath) return;
 
     fetch(`http://127.0.0.1:8000/api/move`, {
