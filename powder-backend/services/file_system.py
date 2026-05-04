@@ -1,6 +1,10 @@
 from pathlib import Path
 import shutil
 import time
+import re
+from datetime import datetime
+import urllib.request
+from urllib.parse import urlparse, urljoin
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -263,3 +267,70 @@ def resolve_wiki_link(target: str) -> str:
 
     # 3. If it doesn't exist at all, return the filename so the frontend can create a "Ghost Note"
     return filename
+
+
+def harvest_external_images(content: str, source_url: str) -> str:
+    """Scans markdown for external images, downloads them, and updates the links to local assets."""
+    matches = re.findall(r'!\[([^\]]*)\]\(([^)]+)\)', content)
+
+    for alt, url in matches:
+        if url.startswith("assets/"):
+            continue
+
+        fetch_url = urljoin(source_url, url)
+        if fetch_url.startswith("//"):
+            fetch_url = "https:" + fetch_url
+
+        try:
+            req = urllib.request.Request(fetch_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as response:
+                image_bytes = response.read()
+
+            parsed_url = urlparse(fetch_url)
+            filename = parsed_url.path.split("/")[-1]
+            if not filename:
+                filename = "harvested_image.png"
+
+            local_path = save_asset(filename, image_bytes)
+
+            old_markdown = f"![{alt}]({url})"
+            new_markdown = f"![{alt}]({local_path})"
+            content = content.replace(old_markdown, new_markdown)
+
+        except Exception as e:
+            print(f"Harvester failed to download {fetch_url}: {e}")
+
+    return content
+
+
+def save_to_inbox(title: str, content: str, source: str = "") -> str:
+    """Ingests external text and saves it safely into the _Inbox folder."""
+    inbox_dir = VAULT_DIR / "_Inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Clean up the title so Windows/Mac doesn't crash on weird characters
+    safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+    if not safe_title:
+        safe_title = f"clip_{int(time.time())}"
+
+    filename = f"{safe_title}.md"
+    file_path = inbox_dir / filename
+
+    # 2. Prevent overwriting if you clip two things with the same exact title
+    if file_path.exists():
+        filename = f"{safe_title}_{int(time.time())}.md"
+        file_path = inbox_dir / filename
+
+    content = harvest_external_images(content, source)
+
+    # 3. Create a beautiful "Frontmatter" header with the metadata
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    header = f"---\nclipped: {timestamp}\nsource: {source}\n---\n\n"
+
+    full_content = header + f"# {title}\n\n" + content
+
+    # 4. Save to the hard drive
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(full_content)
+
+    return f"_Inbox/{filename}"

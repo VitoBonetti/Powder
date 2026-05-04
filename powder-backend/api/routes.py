@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import List
-from models.schemas import NoteData, MoveData
+from models.schemas import NoteData, MoveData, InboxItem
 from services import file_system
 
 router = APIRouter()
@@ -115,5 +115,15 @@ def resolve_link(target: str):
     try:
         path = file_system.resolve_wiki_link(target)
         return {"path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/inbox")
+def add_to_inbox(item: InboxItem):
+    """The Universal Inbox receiver. Push data here from anywhere."""
+    try:
+        path = file_system.save_to_inbox(item.title, item.content, item.source)
+        return {"message": "Successfully ingested into Inbox", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

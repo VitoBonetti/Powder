@@ -212,7 +212,7 @@ function App() {
 
   // --- BULLETPROOF AUTO-SAVE EFFECT ---
   useEffect(() => {
-    if (!activeFile || saveStatus === "idle") return;
+    if (!activeFile || isImageFile || saveStatus === "idle") return;
 
     setSaveStatus("saving");
 
@@ -235,7 +235,7 @@ function App() {
     }, 1000);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [content, activeFile]);
+  }, [content, activeFile, isImageFile]);
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">

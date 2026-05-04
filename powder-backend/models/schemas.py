@@ -9,3 +9,9 @@ class NoteData(BaseModel):
 class MoveData(BaseModel):
     source: str
     destination: str
+
+
+class InboxItem(BaseModel):
+    title: str
+    content: str
+    source: str = ""

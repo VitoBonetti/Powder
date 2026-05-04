@@ -280,6 +280,12 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     }
   }, [refreshTrigger]);
 
+  useEffect(() => {
+    const handleFocus = () => fetchTree();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   const openModal = (type, target) => {
     setInputValue("");
     setModalTarget(target);
