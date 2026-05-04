@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from typing import List
 from models.schemas import NoteData, MoveData
 from services import file_system
 
@@ -62,3 +63,23 @@ def move_vault_item(data: MoveData):
         return {"message": "Moved successfully."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/upload")
+async def upload_files(
+        target_path: str = Form(""),  # The folder where the files should go
+        files: List[UploadFile] = File(...)  # The actual files
+):
+    try:
+        saved_files = []
+        for file in files:
+            content = await file.read()
+            # Send to the file system
+            file_system.save_uploaded_file(target_path, file.filename, content)
+
+            if file.filename.endswith(".md"):
+                saved_files.append(file.filename)
+
+        return {"message": "Successfully uploaded files.", "files": saved_files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

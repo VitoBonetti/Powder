@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload } from 'lucide-react';
 
-// --- CUSTOM MODAL COMPONENT (Replaces window.prompt/confirm) ---
+// --- CUSTOM MODAL COMPONENT ---
+// (We made actionLabel optional so we can have buttons inside the modal instead of at the bottom)
 const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, actionVariant = "primary" }) => {
   const modalRef = useRef(null);
 
-  // Close when clicking outside or hitting ESC
   useEffect(() => {
     const handleOutsideClick = (e) => {
       if (modalRef.current && !modalRef.current.contains(e.target)) onClose();
@@ -43,59 +43,51 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
           <button onClick={onClose} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-medium transition-colors">
             Cancel
           </button>
-          <button onClick={onAction} className={actionButtonClasses}>
-            {actionLabel}
-          </button>
+          {actionLabel && (
+            <button onClick={onAction} className={actionButtonClasses}>
+              {actionLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// --- Updated TreeNode with Drag & Drop ---
+// --- Updated TreeNode with Import Button ---
 const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  // NEW: State to track if an item is being dragged over this folder
   const [isDragOver, setIsDragOver] = useState(false);
 
   const isFolder = node.type === 'folder';
   const isRoot = node.name === "Vault";
 
-  // --- DRAG & DROP HANDLERS ---
-
-  // 1. When you start dragging an item
   const handleDragStart = (e) => {
     e.stopPropagation();
-    // Save the path of the item we are picking up
     e.dataTransfer.setData('sourcePath', node.path || node.name);
   };
 
-  // 2. When you hover an item over a folder
   const handleDragOver = (e) => {
-    e.preventDefault(); // Required to allow dropping
+    e.preventDefault();
     e.stopPropagation();
     if (isFolder) setIsDragOver(true);
   };
 
-  // 3. When you drag away from the folder
   const handleDragLeave = (e) => {
     e.stopPropagation();
     setIsDragOver(false);
   };
 
-  // 4. When you let go of the mouse button
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
 
-    if (!isFolder) return; // Can only drop into folders
+    if (!isFolder) return;
 
     const sourcePath = e.dataTransfer.getData('sourcePath');
-    const destPath = isRoot ? "" : node.path; // Target path
+    const destPath = isRoot ? "" : node.path;
 
-    // Prevent API call if dropped in the same place
     if (!sourcePath || sourcePath === destPath) return;
 
     fetch(`http://127.0.0.1:8000/api/move`, {
@@ -110,7 +102,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   if (!isFolder) {
     return (
       <div
-        draggable // Make the file draggable!
+        draggable
         onDragStart={handleDragStart}
         className="group flex items-center justify-between pl-4 py-1.5 hover:bg-gray-800 cursor-pointer text-gray-300 text-sm rounded-md transition-colors"
         onClick={() => onFileSelect(node.path)}
@@ -119,62 +111,104 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
           <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
           <span className="truncate">{node.name}</span>
         </div>
-        <Trash2
-          onClick={(e) => { e.stopPropagation(); openModal("delete", node); }}
-          className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mr-2"
-        />
+        <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mr-2" />
       </div>
     );
   }
 
   const creationBasePath = isRoot ? "" : `${node.path}/`;
-    return (
-      <div>
-        <div
-          draggable={!isRoot} // You can drag folders, but not the main "Vault"
-          onDragStart={!isRoot ? handleDragStart : undefined}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          // NEW: If hovering, add a blue highlight ring!
-          className={`group flex items-center justify-between py-1.5 hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors ${
-            isDragOver ? 'bg-blue-900/40 ring-1 ring-blue-500 text-blue-100' : 'text-gray-200'
-          }`}
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <div className="flex items-center truncate">
-            {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
-            <Folder className="w-4 h-4 mr-2 text-blue-400 flex-shrink-0" />
-            <span className="truncate">{node.name}</span>
-          </div>
 
-          <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2">
-            <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5"><Plus className="w-3.5 h-3.5" /></button>
-            <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5"><FolderPlus className="w-3.5 h-3.5" /></button>
-            {!isRoot && <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" />}
-          </div>
+  return (
+    <div>
+      <div
+        draggable={!isRoot}
+        onDragStart={!isRoot ? handleDragStart : undefined}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`group flex items-center justify-between py-1.5 hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors ${
+          isDragOver ? 'bg-blue-900/40 ring-1 ring-blue-500 text-blue-100' : 'text-gray-200'
+        }`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center truncate">
+          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
+          <Folder className="w-4 h-4 mr-2 text-blue-400 flex-shrink-0" />
+          <span className="truncate">{node.name}</span>
         </div>
 
-        {/* Auto-expand folder when dragging over it (UX Polish) */}
-        {(isOpen || isDragOver) && node.children && (
-          <div className="pl-3 border-l border-gray-700 ml-2 mt-1">
-            {node.children.map((child, index) => (
-              <TreeNode key={index} node={child} onFileSelect={onFileSelect} refreshTree={refreshTree} openModal={openModal} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+          {/* NEW: Import Button */}
+          <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
 
-// --- Main Sidebar: Handles Modal State and API Calls ---
+          <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5" /></button>
+          <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5" /></button>
+          {!isRoot && <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" title="Delete" />}
+        </div>
+      </div>
+
+      {(isOpen || isDragOver) && node.children && (
+        <div className="pl-3 border-l border-gray-700 ml-2 mt-1">
+          {node.children.map((child, index) => (
+            <TreeNode key={index} node={child} onFileSelect={onFileSelect} refreshTree={refreshTree} openModal={openModal} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Main Sidebar Component ---
+// --- Main Sidebar Component ---
 export default function Sidebar({ onFileSelect }) {
   const [tree, setTree] = useState(null);
 
-  // Modal State Management
-  const [activeModal, setActiveModal] = useState(null); // 'createNote', 'createFolder', 'delete'
-  const [modalTarget, setModalTarget] = useState(null); // String path or Node object
+  const [activeModal, setActiveModal] = useState(null);
+  const [modalTarget, setModalTarget] = useState(null);
   const [inputValue, setInputValue] = useState("");
+
+  // Refs for the hidden file pickers
+  const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
+  const uploadTargetRef = useRef("");
+
+  // --- NEW: Resizable Sidebar State ---
+  const [sidebarWidth, setSidebarWidth] = useState(256); // Default 256px
+  const isResizing = useRef(false);
+
+  // When you click the invisible edge
+  const startResizing = useCallback(() => {
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  // When you move the mouse
+  const resize = useCallback((e) => {
+    if (isResizing.current) {
+      const newWidth = e.clientX;
+      if (newWidth > 200 && newWidth < 600) {
+        setSidebarWidth(newWidth);
+      }
+    }
+  }, []);
+
+  // When you let go of the mouse
+  const stopResizing = useCallback(() => {
+    isResizing.current = false;
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+  }, []);
+
+  // Attach and detach the event listeners
+  useEffect(() => {
+    document.addEventListener('mousemove', resize);
+    document.addEventListener('mouseup', stopResizing);
+    return () => {
+      document.removeEventListener('mousemove', resize);
+      document.removeEventListener('mouseup', stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   const fetchTree = () => {
     fetch('http://127.0.0.1:8000/api/tree')
@@ -187,10 +221,10 @@ export default function Sidebar({ onFileSelect }) {
     fetchTree();
   }, []);
 
-  // Helper to open a specific modal and reset inputs
   const openModal = (type, target) => {
     setInputValue("");
     setModalTarget(target);
+    if (type === 'import') uploadTargetRef.current = target;
     setActiveModal(type);
   };
 
@@ -200,110 +234,106 @@ export default function Sidebar({ onFileSelect }) {
   };
 
   // --- API Action Handlers ---
-
   const handleCreateNoteAction = () => {
     if (!inputValue) return;
     const name = inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`;
-    // modalTarget is the basePath, e.g., "projects/" or ""
     const fullPath = `${modalTarget}${name}`;
-
     fetch(`http://127.0.0.1:8000/api/notes/${fullPath}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: `# ${inputValue}\n\nStart typing here...` })
-    }).then(() => {
-      fetchTree();
-      closeModal();
-    });
+    }).then(() => { fetchTree(); closeModal(); });
   };
 
   const handleCreateFolderAction = () => {
     if (!inputValue) return;
-    // modalTarget is the basePath, e.g., "projects/" or ""
     const fullPath = `${modalTarget}${inputValue}`;
     fetch(`http://127.0.0.1:8000/api/folders/${fullPath}`, { method: 'POST' })
-      .then(() => {
-        fetchTree();
-        closeModal();
-      });
+      .then(() => { fetchTree(); closeModal(); });
   };
 
   const handleDeleteAction = () => {
-    // modalTarget is the full Node object
-    const pathToDelete = modalTarget.path || modalTarget.name; // Root folder uses name
+    const pathToDelete = modalTarget.path || modalTarget.name;
     fetch(`http://127.0.0.1:8000/api/notes/${pathToDelete}`, { method: 'DELETE' })
-      .then(() => {
-        fetchTree();
-        closeModal();
-      })
+      .then(() => { fetchTree(); closeModal(); })
       .catch(err => console.error("Failed to delete:", err));
   };
 
-  return (
-    <div className="w-64 h-screen bg-[#111319] border-r border-gray-800 p-4 flex flex-col z-20">
+  const handleFileUpload = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-      {/* Sleeker Sidebar Header (No top buttons!) */}
+    const formData = new FormData();
+    formData.append('target_path', uploadTargetRef.current);
+
+    Array.from(files).forEach(file => {
+      const path = file.webkitRelativePath || file.name;
+      formData.append('files', file, path);
+    });
+
+    fetch('http://127.0.0.1:8000/api/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(() => {
+      fetchTree();
+      e.target.value = null;
+    })
+    .catch(err => console.error("Upload failed:", err));
+  };
+
+  return (
+    // NEW: We replaced "w-64" with dynamic inline styling for the width, and added relative/flex-shrink-0
+    <div
+      style={{ width: `${sidebarWidth}px` }}
+      className="h-screen bg-[#111319] border-r border-gray-800 p-4 flex flex-col z-20 relative flex-shrink-0"
+    >
+
+      {/* NEW: The Drag Handle Line */}
+      <div
+        onMouseDown={startResizing}
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-50"
+      />
+
+      {/* Hidden HTML5 File Pickers */}
+      <input type="file" multiple accept=".md" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+      <input type="file" webkitdirectory="true" directory="true" ref={folderInputRef} onChange={handleFileUpload} className="hidden" />
+
       <div className="flex items-center justify-between mb-4 px-2">
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Powder Vault</h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
         {tree ? <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} /> : <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>}
       </div>
 
-      {/* --- ALL CUSTOM MODALS INJECTED HERE --- */}
+      {/* --- ALL CUSTOM MODALS --- */}
 
-      {/* 1. New Note Modal */}
-      <Modal
-        isOpen={activeModal === 'createNote'}
-        onClose={closeModal}
-        title="Create New Note"
-        actionLabel="Create Note"
-        onAction={handleCreateNoteAction}
-      >
+      <Modal isOpen={activeModal === 'import'} onClose={closeModal} title="Import into Vault">
+        <p className="mb-4">Select what you would like to import into <strong className="text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
+        <div className="flex flex-col gap-3">
+          <button onClick={() => { fileInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md border border-gray-700 transition-colors">
+            <FileText className="w-5 h-5" /> Import Markdown File(s)
+          </button>
+          <button onClick={() => { folderInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md border border-gray-700 transition-colors">
+            <Folder className="w-5 h-5" /> Import Entire Folder
+          </button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'createNote'} onClose={closeModal} title="Create New Note" actionLabel="Create Note" onAction={handleCreateNoteAction}>
         <p className="mb-3">Enter a name for the new Markdown file.</p>
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="My New Note"
-          autoFocus
-          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-        />
+        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="My New Note" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
       </Modal>
 
-      {/* 2. New Folder Modal */}
-      <Modal
-        isOpen={activeModal === 'createFolder'}
-        onClose={closeModal}
-        title="Create New Folder"
-        actionLabel="Create Folder"
-        onAction={handleCreateFolderAction}
-      >
+      <Modal isOpen={activeModal === 'createFolder'} onClose={closeModal} title="Create New Folder" actionLabel="Create Folder" onAction={handleCreateFolderAction}>
         <p className="mb-3">Enter a name for the new subfolder.</p>
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="New Folder Name"
-          autoFocus
-          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-        />
+        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="New Folder Name" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
       </Modal>
 
-      {/* 3. Delete Confirmation Modal */}
-      <Modal
-        isOpen={activeModal === 'delete'}
-        onClose={closeModal}
-        title="Confirm Deletion"
-        actionLabel="Delete Permanently"
-        onAction={handleDeleteAction}
-        actionVariant="danger"
-      >
+      <Modal isOpen={activeModal === 'delete'} onClose={closeModal} title="Confirm Deletion" actionLabel="Delete Permanently" onAction={handleDeleteAction} actionVariant="danger">
         <p>Are you sure you want to permanently delete <strong className="text-white">'{modalTarget?.name}'</strong>?</p>
-        <p className="mt-2 text-amber-400 text-xs bg-amber-950 p-2 rounded-md border border-amber-800">
-          ⚠️ This action cannot be undone and will delete all contents.
-        </p>
+        <p className="mt-2 text-amber-400 text-xs bg-amber-950 p-2 rounded-md border border-amber-800">⚠️ This action cannot be undone and will delete all contents.</p>
       </Modal>
 
     </div>

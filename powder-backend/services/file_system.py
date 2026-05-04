@@ -131,3 +131,27 @@ def move_item(source_path: str, destination_path: str) -> bool:
 
     shutil.move(str(src), str(dst_dir))
     return True
+
+
+def save_uploaded_file(target_directory: str, filename: str, content: bytes) -> str:
+    """Saves an uploaded file to the specified directory."""
+
+    # FIX: Silently ignore non-markdown files instead of crashing the batch
+    if not filename.endswith(".md"):
+        return ""
+
+    target_dir = VAULT_DIR / target_directory
+    file_path = target_dir / filename
+
+    # Security: Ensure they aren't escaping the Vault
+    if not str(file_path.resolve()).startswith(str(VAULT_DIR.resolve())):
+        raise PermissionError("Access denied.")
+
+    # FIX FOR THE 500 ERROR:
+    # Create the specific parent directories for THIS file, not just the target_dir
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    return str(file_path.relative_to(VAULT_DIR)).replace("\\", "/")
