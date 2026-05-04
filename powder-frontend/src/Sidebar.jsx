@@ -213,7 +213,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect }) {
+export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const [tree, setTree] = useState(null);
 
   const [activeModal, setActiveModal] = useState(null);
@@ -273,6 +273,12 @@ export default function Sidebar({ onFileSelect }) {
   useEffect(() => {
     fetchTree();
   }, []);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchTree();
+    }
+  }, [refreshTrigger]);
 
   const openModal = (type, target) => {
     setInputValue("");

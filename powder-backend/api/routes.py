@@ -108,3 +108,12 @@ async def upload_asset_file(file: UploadFile = File(...)):
         return {"message": "Asset saved", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/resolve-link")
+def resolve_link(target: str):
+    try:
+        path = file_system.resolve_wiki_link(target)
+        return {"path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

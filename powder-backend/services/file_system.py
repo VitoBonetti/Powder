@@ -241,3 +241,25 @@ def save_asset(filename: str, content: bytes) -> str:
 
     # Return the exact path that the Markdown file will use
     return f"assets/{safe_filename}"
+
+
+def resolve_wiki_link(target: str) -> str:
+    """Finds the full path of a note from a wiki-link target."""
+    # Clean up the target just in case brackets get passed
+    target = target.replace("[[", "").replace("]]", "")
+
+    # Obsidian links usually don't include .md, so we add it if missing
+    filename = target if target.endswith(".md") else f"{target}.md"
+
+    # 1. Check if the exact path exists (e.g., if they typed "projects/Ideas.md")
+    exact_path = VAULT_DIR / filename
+    if exact_path.exists():
+        return str(exact_path.relative_to(VAULT_DIR)).replace("\\", "/")
+
+    # 2. If not, search the ENTIRE vault for that filename
+    for md_file in VAULT_DIR.rglob("*.md"):
+        if md_file.name == filename:
+            return str(md_file.relative_to(VAULT_DIR)).replace("\\", "/")
+
+    # 3. If it doesn't exist at all, return the filename so the frontend can create a "Ghost Note"
+    return filename
