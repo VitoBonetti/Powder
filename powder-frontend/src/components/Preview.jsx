@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import mermaid from 'mermaid';
+import { BACKEND_URL } from '../config';
 
 const MermaidDiagram = ({ chart }) => {
   const ref = useRef(null);
@@ -40,7 +41,7 @@ export default function Preview({ content, onLinkClick }) {
             return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline" {...props}>{children}</a>;
           },
           img({node, src, alt, ...props}) {
-            const fullSrc = src.startsWith('http') ? src : `http://localhost:8000/${src}`;
+            const fullSrc = src.startsWith('http') ? src : `${BACKEND_URL}/${src}`;
             return <img src={fullSrc} alt={alt} className="rounded-lg shadow-md border border-gray-700 max-w-full h-auto my-6" {...props} />;
           },
           code({node, inline, className, children, ...props}) {

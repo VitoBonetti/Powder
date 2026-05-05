@@ -6,6 +6,7 @@ import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { EditorView, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
+import { BACKEND_URL } from '../config';
 
 const customMarkdownStyle = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#60a5fa" },
@@ -25,7 +26,7 @@ export default function Editor({ content, onChange, onLinkClick }) {
     view.dispatch({ changes: { from: pos, insert: placeholder } });
     const formData = new FormData();
     formData.append('file', file);
-    fetch('http://localhost:8000/api/upload-asset', {
+    fetch(getApiUrl('/upload-asset'), {
       method: 'POST',
       body: formData,
       credentials: 'include'

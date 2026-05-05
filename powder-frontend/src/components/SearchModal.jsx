@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, FileText } from 'lucide-react';
+import { getApiUrl } from '../config';
 
 export default function SearchModal({ isOpen, onClose, onSelect }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,7 +15,7 @@ export default function SearchModal({ isOpen, onClose, onSelect }) {
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     const delayDebounceFn = setTimeout(() => {
-      fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(searchQuery)}`, {
+      fetch(getApiUrl(`/search?q=${encodeURIComponent(searchQuery)}`), {
         credentials: 'include'
       })
       .then(res => res.json())

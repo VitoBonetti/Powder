@@ -4,8 +4,9 @@ import Sidebar from './Sidebar';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
 import TabBar from './components/TabBar';
-import SearchModal from './components/SearchModal'; // Make sure this path is correct
-import { useAutoSave } from './hooks/useAutoSave';  // Make sure this path is correct
+import SearchModal from './components/SearchModal';
+import { useAutoSave } from './hooks/useAutoSave';
+import { getApiUrl, BACKEND_URL } from './config';
 import { Eye, Edit3, CheckCircle2, Loader2, Search } from 'lucide-react';
 
 function App() {
@@ -25,7 +26,7 @@ function App() {
 
   // Auth check
   useEffect(() => {
-    fetch('http://localhost:8000/api/auth/me', { credentials: 'include' })
+    fetch(getApiUrl('/auth/me'), { credentials: 'include' })
       .then(res => setIsAuthenticated(res.ok))
       .catch(() => setIsAuthenticated(false))
       .finally(() => setIsLoadingAuth(false));
@@ -47,14 +48,14 @@ function App() {
     if (isImageFile) { setSaveStatus("saved"); return; }
 
     setSaveStatus("saving");
-    fetch(`http://localhost:8000/api/notes/${activeFile}`, { credentials: 'include' })
+    fetch(getApiUrl(`/notes/${activeFile}`), { credentials: 'include' })
       .then(async res => res.ok ? res.json() : { content: "" })
       .then(data => { setContent(data.content); setSaveStatus("saved"); })
       .catch(() => { setContent(""); setSaveStatus("saved"); });
   }, [activeFile, isImageFile, setSaveStatus]);
 
   const handleLinkClick = useCallback((target) => {
-    fetch(`http://localhost:8000/api/resolve-link?target=${encodeURIComponent(target)}`, { credentials: 'include' })
+    fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(target)}`), { credentials: 'include' })
       .then(res => res.json())
       .then(data => openFileInTab(data.path))
       .catch(err => console.error("Link resolution failed:", err));
@@ -106,7 +107,7 @@ function App() {
             ) : isImageFile ? (
               <div className="h-full flex flex-col items-center justify-center pb-20">
                 <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
-                  <img src={`http://localhost:8000/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
+                  <img src={`${BACKEND_URL}/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
                 </div>
                 <p className="mt-4 text-gray-500 text-sm font-mono">{activeFile}</p>
               </div>

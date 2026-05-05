@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings } from 'lucide-react';
+import { getApiUrl, BACKEND_URL } from './config';
 
 // --- CUSTOM MODAL COMPONENT ---
 const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, actionVariant = "primary" }) => {
@@ -98,7 +99,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
         if (file.type.startsWith("image/")) {
           const imgData = new FormData();
           imgData.append('file', file);
-          fetch('http://localhost:8000/api/upload-asset', { method: 'POST', body: imgData, credentials: 'include' })
+          fetch(getApiUrl('/upload-asset'), { method: 'POST', body: imgData, credentials: 'include' })
             .then(() => refreshTree());
         } else if (file.name.endsWith(".md")) {
           formDataMd.append('files', file, file.name);
@@ -107,7 +108,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
       });
 
       if (hasMd) {
-        fetch('http://localhost:8000/api/upload', { method: 'POST', body: formDataMd, credentials: 'include' })
+        fetch(getApiUrl('/upload'), { method: 'POST', body: formDataMd, credentials: 'include' })
           .then(() => refreshTree());
       }
       return;
@@ -116,7 +117,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
     const sourcePath = e.dataTransfer.getData('sourcePath');
     if (!sourcePath || sourcePath === destPath) return;
 
-    fetch(`http://localhost:8000/api/move`, {
+    fetch(getApiUrl(`/move`), {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -240,14 +241,14 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   }, [resize, stopResizing]);
 
   const fetchTree = () => {
-    fetch('http://localhost:8000/api/tree', { credentials: 'include' })
+    fetch(getApiUrl('/tree'), { credentials: 'include' })
       .then(res => res.json())
       .then(data => setTree(data))
       .catch(err => console.error("Failed to fetch tree:", err));
   };
 
   const fetchTokens = () => {
-    fetch('http://localhost:8000/api/auth/tokens', { credentials: 'include' })
+    fetch(getApiUrl('/auth/tokens'), { credentials: 'include' })
       .then(res => res.json())
       .then(setTokens)
       .catch(err => console.error("Failed to fetch tokens:", err));
@@ -279,7 +280,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     if (!inputValue) return;
     const name = inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`;
     const fullPath = `${modalTarget}${name}`;
-    fetch(`http://localhost:8000/api/notes/${fullPath}`, {
+    fetch(getApiUrl(`/notes/${fullPath}`), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -290,20 +291,20 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const handleCreateFolderAction = () => {
     if (!inputValue) return;
     const fullPath = `${modalTarget}${inputValue}`;
-    fetch(`http://localhost:8000/api/folders/${fullPath}`, { method: 'POST', credentials: 'include' })
+    fetch(getApiUrl(`/folders/${fullPath}`), { method: 'POST', credentials: 'include' })
       .then(() => { fetchTree(); closeModal(); });
   };
 
   const handleDeleteAction = () => {
     const pathToDelete = modalTarget.path || modalTarget.name;
-    fetch(`http://localhost:8000/api/notes/${pathToDelete}`, { method: 'DELETE', credentials: 'include' })
+    fetch(getApiUrl(`/notes/${pathToDelete}`), { method: 'DELETE', credentials: 'include' })
       .then(() => { fetchTree(); closeModal(); })
       .catch(err => console.error("Failed to delete:", err));
   };
 
   const handleGenerateToken = () => {
     if (!inputValue) return;
-    fetch('http://localhost:8000/api/auth/tokens', {
+    fetch(getApiUrl('/auth/tokens'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: inputValue }),
@@ -318,7 +319,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   };
 
   const handleRevokeToken = (tokenId) => {
-    fetch(`http://localhost:8000/api/auth/tokens/${tokenId}`, {
+    fetch(getApiUrl(`/auth/tokens/${tokenId}`), {
       method: 'DELETE',
       credentials: 'include'
     }).then(fetchTokens);
@@ -333,14 +334,14 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
       const path = file.webkitRelativePath || file.name;
       formData.append('files', file, path);
     });
-    fetch('http://localhost:8000/api/upload', { method: 'POST', credentials: 'include', body: formData })
+    fetch(getApiUrl('/upload'), { method: 'POST', credentials: 'include', body: formData })
     .then(() => { fetchTree(); e.target.value = null; })
     .catch(err => console.error("Upload failed:", err));
   };
 
   const handleLogout = async () => {
     try {
-        await fetch('http://localhost:8000/api/auth/logout', { method: 'POST', credentials: 'include' });
+        await fetch(getApiUrl('/auth/logout'), { method: 'POST', credentials: 'include' });
         window.location.href = "/";
     } catch (err) { console.error("Logout failed", err); }
   };

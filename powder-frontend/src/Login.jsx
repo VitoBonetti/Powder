@@ -1,9 +1,10 @@
 import React from 'react';
+import { BACKEND_URL } from './config';
 
 export default function Login() {
   const handleLogin = () => {
     // Redirect the browser straight to our FastAPI GitHub bouncer
-    window.location.href = "http://localhost:8000/api/auth/login";
+    window.location.href = `${BACKEND_URL}/api/auth/login`;
   };
 
   return (
