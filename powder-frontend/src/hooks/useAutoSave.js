@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '../config';
 
 export function useAutoSave(content, activeFile, isImageFile) {
   const [saveStatus, setSaveStatus] = useState("idle");
@@ -10,7 +11,7 @@ export function useAutoSave(content, activeFile, isImageFile) {
     setSaveStatus("saving");
 
     const delayDebounceFn = setTimeout(() => {
-      fetch(`http://localhost:8000/api/notes/${activeFile}`, {
+      fetch(getApiUrl(`/notes/${activeFile}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

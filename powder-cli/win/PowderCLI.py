@@ -34,7 +34,7 @@ payload = {
 # 5. Execute Request
 try:
     req = urllib.request.Request(
-        "http://localhost:8000/api/inbox",
+        "https://powder.vitobonetti.nl/api/inbox",
         data=json.dumps(payload).encode('utf-8'),
         headers={
             'Content-Type': 'application/json',

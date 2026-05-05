@@ -81,50 +81,77 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
     setIsDragOver(false);
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-
     if (!isFolder) return;
     const destPath = isRoot ? "" : node.path;
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const files = Array.from(e.dataTransfer.files);
+    // 1. Internal Move
+    const sourcePath = e.dataTransfer.getData('sourcePath');
+    if (sourcePath) {
+      if (sourcePath !== destPath) {
+        fetch(getApiUrl(`/move`), {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: sourcePath, destination: destPath })
+        })
+        .then(() => refreshTree())
+        .catch(err => console.error("Move failed:", err));
+      }
+      return;
+    }
+
+    // 2. External Drag & Drop (Files and Folders)
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      const items = Array.from(e.dataTransfer.items).filter(i => i.kind === 'file');
+      if (items.length === 0) return;
+
       const formDataMd = new FormData();
       formDataMd.append('target_path', destPath);
       let hasMd = false;
 
-      files.forEach(file => {
-        if (file.type.startsWith("image/")) {
-          const imgData = new FormData();
-          imgData.append('file', file);
-          fetch(getApiUrl('/upload-asset'), { method: 'POST', body: imgData, credentials: 'include' })
-            .then(() => refreshTree());
-        } else if (file.name.endsWith(".md")) {
-          formDataMd.append('files', file, file.name);
-          hasMd = true;
+      const readEntry = async (entry, path = '') => {
+        if (entry.isFile) {
+          return new Promise((resolve) => {
+            entry.file((file) => {
+              if (file.type.startsWith("image/")) {
+                const imgData = new FormData();
+                imgData.append('file', file);
+                fetch(getApiUrl('/upload-asset'), { method: 'POST', body: imgData, credentials: 'include' })
+                  .then(() => refreshTree());
+              } else if (file.name.endsWith(".md")) {
+                formDataMd.append('files', file, path + file.name);
+                hasMd = true;
+              }
+              resolve();
+            });
+          });
+        } else if (entry.isDirectory) {
+          const dirReader = entry.createReader();
+          return new Promise((resolve) => {
+            dirReader.readEntries(async (entries) => {
+              for (const child of entries) {
+                await readEntry(child, path + entry.name + '/');
+              }
+              resolve();
+            });
+          });
         }
-      });
+      };
+
+      for (const item of items) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) await readEntry(entry);
+      }
 
       if (hasMd) {
         fetch(getApiUrl('/upload'), { method: 'POST', body: formDataMd, credentials: 'include' })
           .then(() => refreshTree());
       }
-      return;
     }
-
-    const sourcePath = e.dataTransfer.getData('sourcePath');
-    if (!sourcePath || sourcePath === destPath) return;
-
-    fetch(getApiUrl(`/move`), {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: sourcePath, destination: destPath })
-    })
-    .then(() => refreshTree())
-    .catch(err => console.error("Move failed:", err));
   };
 
   if (!isFolder) {
