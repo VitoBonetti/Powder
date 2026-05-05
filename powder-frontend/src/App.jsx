@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Login from './Login';
 import Sidebar from './Sidebar';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
 import TabBar from './components/TabBar';
+import TemplateModal from './components/TemplateModal';
 import SearchModal from './components/SearchModal';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
@@ -19,11 +20,53 @@ function App() {
   const [openTabs, setOpenTabs] = useState([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState("");
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const editorViewRef = useRef(null);
 
   const handleTagClick = useCallback((tag) => {
     setSearchInitialQuery(tag);
     setIsSearchOpen(true);
   }, []);
+
+  // Opens the modal and saves the Editor engine reference
+  const handleOpenTemplateModal = useCallback((view) => {
+    editorViewRef.current = view;
+    setIsTemplateModalOpen(true);
+  }, []);
+
+  // Fetches the template and injects it exactly at the cursor
+  const handleInsertTemplate = async (templateName) => {
+    setIsTemplateModalOpen(false);
+    if (!editorViewRef.current) return;
+
+    try {
+      const res = await fetch(getApiUrl(`/notes/_Templates/${templateName}`), { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const now = new Date();
+        const title = activeFile ? activeFile.split('/').pop().replace('.md', '') : "Note";
+
+        // Substitute variables
+        const textToInsert = data.content
+          .replace(/\{\{date\}\}/g, now.toISOString().split('T')[0])
+          .replace(/\{\{time\}\}/g, now.toTimeString().split(' ')[0].substring(0, 5))
+          .replace(/\{\{title\}\}/g, title);
+
+        const view = editorViewRef.current;
+        const cursorPosition = view.state.selection.main.head;
+
+        // Inject the text and move the cursor to the end of the injected text
+        view.dispatch({
+          changes: { from: cursorPosition, insert: textToInsert },
+          selection: { anchor: cursorPosition + textToInsert.length }
+        });
+
+        view.focus(); // Keep the user typing seamlessly!
+      }
+    } catch (err) {
+      console.error("Failed to insert template", err);
+    }
+  };
 
   const isImageFile = activeFile && activeFile.match(/\.(png|jpe?g|gif|webp|svg)$/i);
 
@@ -120,13 +163,14 @@ function App() {
             ) : isPreview ? (
               <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             ) : (
-              <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+              <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
             )}
           </div>
         </div>
       </main>
 
       <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} initialQuery={searchInitialQuery} />
+      <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} onSelect={handleInsertTemplate} />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { languages } from '@codemirror/language-data';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
-import { EditorView, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
+import { EditorView, Decoration, ViewPlugin, MatchDecorator, keymap } from '@codemirror/view';
 import { BACKEND_URL } from '../config';
 
 const customMarkdownStyle = HighlightStyle.define([
@@ -18,7 +18,7 @@ const customMarkdownStyle = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
 ]);
 
-export default function Editor({ content, onChange, onLinkClick, onTagClick }) {
+export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate }) {
 
   // Image Upload Logic
   const uploadImage = (file, view, pos) => {
@@ -68,11 +68,22 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick }) {
       update(update) { this.decorations = wikiLinkDecorator.updateDeco(update, this.decorations); }
     }, { decorations: v => v.decorations });
 
+    const templateShortcut = keymap.of([
+      {
+        key: "Alt-t",
+        run: (view) => {
+          if (onOpenTemplate) onOpenTemplate(view);
+          return true; // Tells CodeMirror we handled the keystroke
+        }
+      }
+    ]);
+
     return [
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       syntaxHighlighting(customMarkdownStyle),
       wikiLinkPlugin,
       tagPlugin,
+      templateShortcut,
       EditorView.domEventHandlers({
         click(event) {
           // Check for WikiLinks
