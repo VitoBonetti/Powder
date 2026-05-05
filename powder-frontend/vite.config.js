@@ -10,4 +10,5 @@ export default defineConfig({
   ],
   build: {
     assetsDir: 'static'
+  }
 })

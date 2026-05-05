@@ -13,7 +13,7 @@ RUN npm run build
 # ==========================================
 # STAGE 2: Setup the FastAPI Backend
 # ==========================================
-FROM python:3.11-slim
+FROM python:3.13-slim
 WORKDIR /app
 
 # SECURITY: Create a dedicated non-root user and group
