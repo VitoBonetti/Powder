@@ -15,41 +15,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     target: { tabId: tab.id },
     function: () => {
       const sel = window.getSelection();
-      if (!sel.rangeCount) return ""; // Nothing highlighted
+      if (!sel.rangeCount || sel.toString().trim() === "") return ""; // Nothing highlighted
 
-      // 1. Grab the actual HTML elements they highlighted, not just the text
+      // ... (Keep your existing HTML-to-Markdown Regex logic here) ...
       const container = document.createElement("div");
       container.appendChild(sel.getRangeAt(0).cloneContents());
 
-      // 2. Translate the HTML tags into Markdown syntax
       let md = container.innerHTML
-        // Convert Images (with or without alt text)
         .replace(/<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi, '\n![$2]($1)\n')
         .replace(/<img[^>]*src="([^"]+)"[^>]*>/gi, '\n![]($1)\n')
-        // Convert Links
         .replace(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-        // Convert Bold & Italics
         .replace(/<(b|strong)[^>]*>(.*?)<\/\1>/gi, '**$2**')
         .replace(/<(i|em)[^>]*>(.*?)<\/\1>/gi, '*$2*')
-        // Convert Headers (h1-h6)
         .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (m, lvl, txt) => '\n\n' + '#'.repeat(lvl) + ' ' + txt + '\n\n')
-        // Convert Paragraphs & Line Breaks
         .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
         .replace(/<br[^>]*>/gi, '\n')
-        // Strip out any remaining HTML tags (like <div> or <span>) we don't care about
         .replace(/<[^>]+>/g, '');
 
-      // 3. Clean up messy HTML entities (turns &amp; back into &)
       const decoder = document.createElement('textarea');
       decoder.innerHTML = md;
-
-      // Clean up excessive blank lines
       return decoder.value.trim().replace(/\n{3,}/g, '\n\n');
     }
-  }, (results) => {
-    if (results && results[0] && results[0].result) {
-      contentInput.value = results[0].result;
+  }, async (results) => {
+    let capturedText = results && results[0] ? results[0].result : "";
+
+    // THE CLIPBOARD FALLBACK
+    if (!capturedText) {
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText) {
+          capturedText = "> *Pasted from Clipboard*\n\n" + clipboardText;
+        }
+      } catch (err) {
+        console.warn("Could not read clipboard", err);
+      }
     }
+
+    contentInput.value = capturedText;
   });
 
   // Save Button Logic (Unchanged)

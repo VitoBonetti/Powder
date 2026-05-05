@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Login from './Login';
 import Sidebar from './Sidebar';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -12,7 +13,6 @@ import mermaid from 'mermaid';
 import { EditorView, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
 
 // --- 1. THE RESTORED CODEMIRROR WIKI-LINK PLUGIN ---
-// We use a specific class 'cm-wiki-link' so we can accurately detect clicks in the editor
 const wikiLinkDecorator = new MatchDecorator({
   regexp: /\[\[(.*?)\]\]/g,
   decoration: match => Decoration.mark({
@@ -52,6 +52,11 @@ const MermaidDiagram = ({ chart }) => {
 };
 
 function App() {
+  // --- AUTHENTICATION STATE ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
+  // --- APP STATE ---
   const [content, setContent] = useState("");
   const [isPreview, setIsPreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState("idle");
@@ -67,9 +72,34 @@ function App() {
   const searchInputRef = useRef(null);
   const [lastSaved, setLastSaved] = useState(0);
 
+  // --- AUTHENTICATION CHECK ---
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/auth/me', {
+        credentials: 'include' // CRITICAL: Send the HttpOnly cookie
+      });
+      if (response.ok) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
   // --- 2. UNIFIED LINK OPENER ---
   const handleLinkClick = useCallback((target) => {
-    fetch(`http://127.0.0.1:8000/api/resolve-link?target=${encodeURIComponent(target)}`)
+    fetch(`http://localhost:8000/api/resolve-link?target=${encodeURIComponent(target)}`, {
+      credentials: 'include' // Auth Lock
+    })
       .then(res => res.json())
       .then(data => {
         const resolvedPath = data.path;
@@ -116,7 +146,9 @@ function App() {
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     const delayDebounceFn = setTimeout(() => {
-      fetch(`http://127.0.0.1:8000/api/search?q=${encodeURIComponent(searchQuery)}`)
+      fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(searchQuery)}`, {
+        credentials: 'include' // Auth Lock
+      })
         .then(res => res.json())
         .then(data => setSearchResults(data))
         .catch(err => console.error("Search failed:", err));
@@ -130,7 +162,11 @@ function App() {
     view.dispatch({ changes: { from: pos, insert: placeholder } });
     const formData = new FormData();
     formData.append('file', file);
-    fetch('http://127.0.0.1:8000/api/upload-asset', { method: 'POST', body: formData })
+    fetch('http://localhost:8000/api/upload-asset', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include' // Auth Lock
+    })
     .then(res => res.json())
     .then(data => {
       const currentDoc = view.state.doc.toString();
@@ -142,18 +178,15 @@ function App() {
   };
 
   // --- 3. DYNAMIC EDITOR EXTENSIONS ---
-  // We wrap the extensions in useMemo so the click handler always has access to the latest tabs
   const editorExtensions = useMemo(() => [
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(customMarkdownStyle),
-    wikiLinkPlugin, // <-- The restored editor decorator
+    wikiLinkPlugin,
     EditorView.domEventHandlers({
-      // The robust click handler for edit mode
       click(event, view) {
-        // Find the closest purple link element
         const el = event.target.closest('.cm-wiki-link');
         if (el && el.hasAttribute('data-target')) {
-          event.preventDefault(); // Stop standard browser behavior
+          event.preventDefault();
           handleLinkClick(el.getAttribute('data-target'));
           return true;
         }
@@ -185,18 +218,20 @@ function App() {
         return false;
       }
     })
-  ], [handleLinkClick]); // Re-bind if handleLinkClick updates
+  ], [handleLinkClick]);
 
-  // Load and Save Effects
+  // Load File Effects
   useEffect(() => {
     if (!activeFile) { setContent(""); return; }
     if (isImageFile) { setSaveStatus("saved"); return; }
 
-    setSaveStatus("saving"); // Indicate loading
+    setSaveStatus("saving");
 
-    fetch(`http://127.0.0.1:8000/api/notes/${activeFile}`)
+    fetch(`http://localhost:8000/api/notes/${activeFile}`, {
+      credentials: 'include' // Auth Lock
+    })
       .then(async res => {
-        if (!res.ok) throw new Error("Phantom Note"); // Catch the 404 gracefully
+        if (!res.ok) throw new Error("Phantom Note");
         return res.json();
       })
       .then(data => {
@@ -204,9 +239,8 @@ function App() {
         setSaveStatus("saved");
       })
       .catch(err => {
-        // It's a new phantom note! Clear the editor so it's blank.
         setContent("");
-        setSaveStatus("saved"); // Stop the loading spinner
+        setSaveStatus("saved");
       });
   }, [activeFile, isImageFile]);
 
@@ -217,25 +251,35 @@ function App() {
     setSaveStatus("saving");
 
     const delayDebounceFn = setTimeout(() => {
-      fetch(`http://127.0.0.1:8000/api/notes/${activeFile}`, {
+      fetch(`http://localhost:8000/api/notes/${activeFile}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // The || "" ensures we NEVER send undefined to Python, preventing the 422!
+        credentials: 'include', // Auth Lock
         body: JSON.stringify({ content: content || "" })
       })
       .then(res => {
         if (!res.ok) throw new Error("Backend rejected save");
         setSaveStatus("saved");
-        setLastSaved(Date.now()); // Trigger sidebar refresh
+        setLastSaved(Date.now());
       })
       .catch(err => {
         console.error("Error saving note:", err);
-        setSaveStatus("saved"); // Even if it fails, stop the infinite loading loop
+        setSaveStatus("saved");
       });
     }, 1000);
 
     return () => clearTimeout(delayDebounceFn);
   }, [content, activeFile, isImageFile]);
+
+  // --- RENDERING ROUTER ---
+
+  if (isLoadingAuth) {
+    return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center text-[#60a5fa] font-mono text-xl animate-pulse">Decrypting Vault...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">
@@ -274,23 +318,21 @@ function App() {
               <div className="h-full flex items-center justify-center text-gray-500">Select a note from the sidebar to start writing.</div>
             ) : isImageFile ? (
               <div className="h-full flex flex-col items-center justify-center pb-20">
-                <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center"><img src={`http://127.0.0.1:8000/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" /></div>
+                <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center"><img src={`http://localhost:8000/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" /></div>
                 <p className="mt-4 text-gray-500 text-sm font-mono">{activeFile}</p>
               </div>
             ) : isPreview ? (
               <div className="prose prose-invert prose-lg max-w-none pb-20">
-                {/* --- 4. THE BULLETPROOF MARKDOWN RENDERER --- */}
                 <ReactMarkdown
                   components={{
                     a({node, href, children, ...props}) {
-                      // We intercept the safe #wiki/ format
                       if (href?.startsWith('#wiki/')) {
                         const targetName = decodeURIComponent(href.replace('#wiki/', ''));
                         return (
                           <a
                             href={href}
                             onClick={(e) => {
-                              e.preventDefault(); // Absolutely block browser navigation
+                              e.preventDefault();
                               handleLinkClick(targetName);
                             }}
                             className="text-purple-400 font-medium no-underline hover:underline cursor-pointer bg-purple-900/20 px-1 rounded transition-colors"
@@ -302,7 +344,7 @@ function App() {
                       return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline" {...props}>{children}</a>;
                     },
                     img({node, src, alt, ...props}) {
-                      const fullSrc = src.startsWith('http') ? src : `http://127.0.0.1:8000/${src}`;
+                      const fullSrc = src.startsWith('http') ? src : `http://localhost:8000/${src}`;
                       return <img src={fullSrc} alt={alt} className="rounded-lg shadow-md border border-gray-700 max-w-full h-auto my-6" {...props} />;
                     },
                     code({node, inline, className, children, ...props}) {
@@ -313,7 +355,6 @@ function App() {
                     }
                   }}
                 >
-                  {/* Safely encode the URL component to survive spaces! */}
                   {content.replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[[${noteName}]](#wiki/${encodeURIComponent(noteName)})`)}
                 </ReactMarkdown>
               </div>
@@ -321,7 +362,7 @@ function App() {
               <CodeMirror
                 value={content}
                 theme={vscodeDark}
-                extensions={editorExtensions} // <-- Using the dynamically bound extensions
+                extensions={editorExtensions}
                 onChange={(value) => setContent(value)}
                 className="text-lg powder-editor pb-20"
                 basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}

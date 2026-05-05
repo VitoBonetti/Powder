@@ -1,19 +1,34 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from typing import List
+from dotenv import load_dotenv
 from models.schemas import NoteData, MoveData, InboxItem
 from services import file_system
+from api.auth import verify_access
+import os
 
+
+load_dotenv()
 router = APIRouter()
+
+SECRET_API_KEY = os.getenv("POWDER_API_KEY", "FAIL_IF_NOT_SET")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+
+def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key != SECRET_API_KEY or SECRET_API_KEY == "FAIL_IF_NOT_SET":
+        raise HTTPException(status_code=403, detail="Access Denied: Invalid or Missing API Key")
+    return api_key
 
 
 @router.get("/notes")
-def list_notes():
+def list_notes(user: str = Depends(verify_access)):
     notes = file_system.get_all_notes()
     return {"notes": notes}
 
 
 @router.get("/notes/{file_path:path}")
-def get_note(file_path: str):
+def get_note(file_path: str, user: str = Depends(verify_access)):
     try:
         content = file_system.read_note_content(file_path)
         return {"content": content}
@@ -24,20 +39,20 @@ def get_note(file_path: str):
 
 
 @router.post("/notes/{file_path:path}")
-def save_note(file_path: str, note: NoteData):
+def save_note(file_path: str, note: NoteData, user: str = Depends(verify_access)):
     final_path = file_system.save_note_content(file_path, note.content)
     return {"message": f"Note '{final_path}' saved successfully."}
 
 
 @router.get("/tree")
-def get_tree():
+def get_tree(user: str = Depends(verify_access)):
     """Returns the nested file tree for the frontend sidebar."""
     tree = file_system.get_file_tree()
     return tree
 
 
 @router.post("/folders/{folder_path:path}")
-def create_new_folder(folder_path: str):
+def create_new_folder(folder_path: str, user: str = Depends(verify_access)):
     try:
         file_system.create_folder(folder_path)
         return {"message": f"Folder '{folder_path}' created."}
@@ -46,7 +61,7 @@ def create_new_folder(folder_path: str):
 
 
 @router.delete("/notes/{file_path:path}")
-def delete_vault_item(file_path: str):
+def delete_vault_item(file_path: str, user: str = Depends(verify_access)):
     try:
         file_system.delete_item(file_path)
         return {"message": "Deleted successfully."}
@@ -57,7 +72,7 @@ def delete_vault_item(file_path: str):
 
 
 @router.put("/move")
-def move_vault_item(data: MoveData):
+def move_vault_item(data: MoveData, user: str = Depends(verify_access)):
     try:
         file_system.move_item(data.source, data.destination)
         return {"message": "Moved successfully."}
@@ -68,7 +83,8 @@ def move_vault_item(data: MoveData):
 @router.post("/upload")
 async def upload_files(
         target_path: str = Form(""),  # The folder where the files should go
-        files: List[UploadFile] = File(...)  # The actual files
+        files: List[UploadFile] = File(...),  # The actual files
+        user: str = Depends(verify_access)
 ):
     try:
         saved_files = []
@@ -86,7 +102,7 @@ async def upload_files(
 
 
 @router.get("/search")
-def global_search(q: str = ""):
+def global_search(q: str = "", user: str = Depends(verify_access)):
     """Takes a query string 'q' and returns matching files and snippets."""
     try:
         results = file_system.search_vault(q)
@@ -96,7 +112,7 @@ def global_search(q: str = ""):
 
 
 @router.post("/upload-asset")
-async def upload_asset_file(file: UploadFile = File(...)):
+async def upload_asset_file(file: UploadFile = File(...), user: str = Depends(verify_access)):
     try:
         # Ensure they are only uploading images
         if not file.content_type.startswith("image/"):
@@ -111,7 +127,7 @@ async def upload_asset_file(file: UploadFile = File(...)):
 
 
 @router.get("/resolve-link")
-def resolve_link(target: str):
+def resolve_link(target: str, user: str = Depends(verify_access)):
     try:
         path = file_system.resolve_wiki_link(target)
         return {"path": path}
@@ -120,7 +136,7 @@ def resolve_link(target: str):
 
 
 @router.post("/inbox")
-def add_to_inbox(item: InboxItem):
+def add_to_inbox(item: InboxItem, user: str = Depends(verify_access)):
     """The Universal Inbox receiver. Push data here from anywhere."""
     try:
         path = file_system.save_to_inbox(item.title, item.content, item.source)

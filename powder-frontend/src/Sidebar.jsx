@@ -106,7 +106,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
           // Send images straight to the global assets folder
           const imgData = new FormData();
           imgData.append('file', file);
-          fetch('http://127.0.0.1:8000/api/upload-asset', { method: 'POST', body: imgData })
+          fetch('http://localhost:8000/api/upload-asset', { method: 'POST', body: imgData, credentials: 'include' })
             .then(() => refreshTree());
         } else if (file.name.endsWith(".md")) {
           // Send Markdown files to the specific folder we hovered over
@@ -117,7 +117,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 
       // Upload the markdown batch if we found any
       if (hasMd) {
-        fetch('http://127.0.0.1:8000/api/upload', { method: 'POST', body: formDataMd })
+        fetch('http://localhost:8000/api/upload', { method: 'POST', body: formDataMd, credentials: 'include' })
           .then(() => refreshTree());
       }
       return; // Stop the function here so internal move logic doesn't fire
@@ -127,8 +127,9 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
     const sourcePath = e.dataTransfer.getData('sourcePath');
     if (!sourcePath || sourcePath === destPath) return;
 
-    fetch(`http://127.0.0.1:8000/api/move`, {
+    fetch(`http://localhost:8000/api/move`, {
       method: 'PUT',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source: sourcePath, destination: destPath })
     })
@@ -264,11 +265,13 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   }, [resize, stopResizing]);
 
   const fetchTree = () => {
-    fetch('http://127.0.0.1:8000/api/tree')
+    fetch('http://localhost:8000/api/tree', {
+        credentials: 'include'
+    })
       .then(res => res.json())
       .then(data => setTree(data))
       .catch(err => console.error("Failed to fetch tree:", err));
-  };
+};
 
   useEffect(() => {
     fetchTree();
@@ -303,8 +306,9 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     if (!inputValue) return;
     const name = inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`;
     const fullPath = `${modalTarget}${name}`;
-    fetch(`http://127.0.0.1:8000/api/notes/${fullPath}`, {
+    fetch(`http://localhost:8000/api/notes/${fullPath}`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: `# ${inputValue}\n\nStart typing here...` })
     }).then(() => { fetchTree(); closeModal(); });
@@ -313,13 +317,13 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const handleCreateFolderAction = () => {
     if (!inputValue) return;
     const fullPath = `${modalTarget}${inputValue}`;
-    fetch(`http://127.0.0.1:8000/api/folders/${fullPath}`, { method: 'POST' })
+    fetch(`http://localhost:8000/api/folders/${fullPath}`, { method: 'POST', credentials: 'include' })
       .then(() => { fetchTree(); closeModal(); });
   };
 
   const handleDeleteAction = () => {
     const pathToDelete = modalTarget.path || modalTarget.name;
-    fetch(`http://127.0.0.1:8000/api/notes/${pathToDelete}`, { method: 'DELETE' })
+    fetch(`http://localhost:8000/api/notes/${pathToDelete}`, { method: 'DELETE', credentials: 'include' })
       .then(() => { fetchTree(); closeModal(); })
       .catch(err => console.error("Failed to delete:", err));
   };
@@ -336,8 +340,9 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
       formData.append('files', file, path);
     });
 
-    fetch('http://127.0.0.1:8000/api/upload', {
+    fetch('http://localhost:8000/api/upload', {
       method: 'POST',
+      credentials: 'include',
       body: formData
     })
     .then(() => {

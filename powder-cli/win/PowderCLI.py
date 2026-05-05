@@ -1,0 +1,34 @@
+import sys
+import json
+import urllib.request
+import argparse
+
+# Set up the command line arguments
+parser = argparse.ArgumentParser(description="Pipe terminal output to Powder Vault")
+parser.add_argument("title", nargs="?", default="Terminal Output", help="Title of the note")
+args = parser.parse_args()
+
+# Read EVERYTHING from the piped standard input
+content = sys.stdin.read()
+
+# Wrap it in a markdown code block so it renders like a terminal in the app
+formatted_content = f"```text\n{content}\n```"
+
+# Build the payload
+payload = {
+    "title": args.title,
+    "content": formatted_content,
+    "source": "CLI Pipeline"
+}
+
+# Shoot it to the Vault API
+try:
+    req = urllib.request.Request(
+        "http://127.0.0.1:8000/api/inbox",
+        data=json.dumps(payload).encode('utf-8'),
+        headers={'Content-Type': 'application/json'}
+    )
+    urllib.request.urlopen(req)
+    print(f"\n[+] Successfully piped to Vault: '_Inbox/{args.title.replace(' ', '_')}.md'")
+except Exception as e:
+    print(f"\n[-] Failed to reach Powder Vault. Is the server running? Error: {e}")
