@@ -1,0 +1,16 @@
+services:
+  powder:
+    build: .
+    container_name: powder_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - POWDER_API_KEY=${POWDER_API_KEY}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_GITHUB_USERNAMES=${ALLOWED_GITHUB_USERNAMES}
+    volumes:
+      - ./vault_data:/app/powder-backend/vault
+      - ./vault_security.db:/app/powder-backend/vault_security.db
