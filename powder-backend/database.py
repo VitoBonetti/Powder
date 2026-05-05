@@ -9,7 +9,7 @@ def get_db():
     return conn
 
 def init_db():
-    """Creates the tokens table if it doesn't exist."""
+    """Creates the tokens table for CLI access."""
     conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS api_tokens (

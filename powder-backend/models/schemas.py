@@ -15,3 +15,6 @@ class InboxItem(BaseModel):
     title: str
     content: str
     source: str = ""
+
+class TokenRequest(BaseModel):
+    name: str

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings } from 'lucide-react';
 
 // --- CUSTOM MODAL COMPONENT ---
 const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, actionVariant = "primary" }) => {
@@ -200,6 +200,10 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const [modalTarget, setModalTarget] = useState(null);
   const [inputValue, setInputValue] = useState("");
 
+  // NEW: Token Management State
+  const [tokens, setTokens] = useState([]);
+  const [newToken, setNewToken] = useState("");
+
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
   const uploadTargetRef = useRef("");
@@ -242,6 +246,13 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
       .catch(err => console.error("Failed to fetch tree:", err));
   };
 
+  const fetchTokens = () => {
+    fetch('http://localhost:8000/api/auth/tokens', { credentials: 'include' })
+      .then(res => res.json())
+      .then(setTokens)
+      .catch(err => console.error("Failed to fetch tokens:", err));
+  };
+
   useEffect(() => { fetchTree(); }, []);
   useEffect(() => { if (refreshTrigger > 0) fetchTree(); }, [refreshTrigger]);
   useEffect(() => {
@@ -254,12 +265,14 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     setInputValue("");
     setModalTarget(target);
     if (type === 'import') uploadTargetRef.current = target;
+    if (type === 'settings') fetchTokens();
     setActiveModal(type);
   };
 
   const closeModal = () => {
     setActiveModal(null);
     setModalTarget(null);
+    setNewToken("");
   };
 
   const handleCreateNoteAction = () => {
@@ -286,6 +299,29 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     fetch(`http://localhost:8000/api/notes/${pathToDelete}`, { method: 'DELETE', credentials: 'include' })
       .then(() => { fetchTree(); closeModal(); })
       .catch(err => console.error("Failed to delete:", err));
+  };
+
+  const handleGenerateToken = () => {
+    if (!inputValue) return;
+    fetch('http://localhost:8000/api/auth/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: inputValue }),
+      credentials: 'include'
+    })
+    .then(res => res.json())
+    .then(data => {
+      setNewToken(data.token);
+      fetchTokens();
+      setInputValue("");
+    });
+  };
+
+  const handleRevokeToken = (tokenId) => {
+    fetch(`http://localhost:8000/api/auth/tokens/${tokenId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    }).then(fetchTokens);
   };
 
   const handleFileUpload = (e) => {
@@ -334,7 +370,16 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
         )}
       </div>
 
-      <div className="mt-auto pt-4 border-t border-gray-800 flex-shrink-0">
+      {/* --- FOOTER SECTION: SETTINGS & LOGOUT --- */}
+      <div className="mt-auto pt-4 border-t border-gray-800 flex flex-col gap-1 flex-shrink-0">
+        <button
+          onClick={() => openModal('settings')}
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-blue-400 hover:bg-blue-900/10 rounded-md transition-all group"
+        >
+          <Settings className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
+          <span className="font-medium">API Settings</span>
+        </button>
+
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/10 rounded-md transition-all group"
@@ -342,12 +387,65 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
           <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
           <span className="font-medium">Logout</span>
         </button>
+
         <div className="mt-1 px-3 py-1 text-[10px] text-gray-600 uppercase tracking-widest">
           Vault Secured
         </div>
       </div>
 
       {/* --- MODALS --- */}
+      <Modal isOpen={activeModal === 'settings'} onClose={closeModal} title="CLI & API Access">
+        <div className="space-y-4">
+          <p className="text-xs text-gray-400">Manage Personal Access Tokens for your CLI and terminal agents.</p>
+
+          {newToken && (
+            <div className="p-3 bg-green-900/30 border border-green-500 rounded text-xs break-all animate-in fade-in slide-in-from-top-2">
+              <p className="text-green-400 font-bold mb-1">Copy this now (it won't be shown again):</p>
+              <code className="text-white selection:bg-green-500">{newToken}</code>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              placeholder="Token Name (e.g. Work Laptop)"
+              className="flex-1 bg-gray-900 border border-gray-700 p-2 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleGenerateToken}
+              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium transition-colors"
+            >
+              Generate
+            </button>
+          </div>
+
+          <div className="border-t border-gray-800 pt-2 max-h-48 overflow-y-auto">
+            <h4 className="text-[10px] uppercase text-gray-500 font-bold mb-2">Active Tokens</h4>
+            {tokens.length === 0 ? (
+              <p className="text-xs text-gray-600 italic">No active tokens found.</p>
+            ) : (
+              tokens.map(t => (
+                <div key={t.id} className="flex justify-between items-center text-xs py-2 border-b border-gray-800/50">
+                  <div className="flex flex-col">
+                    <span className="text-gray-200">{t.name}</span>
+                    <span className="text-[9px] text-gray-600">{new Date(t.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRevokeToken(t.id)}
+                    className="text-red-500 hover:text-red-400 text-[10px] font-bold"
+                  >
+                    REVOKE
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* ... (Existing import, createNote, createFolder, delete modals) ... */}
       <Modal isOpen={activeModal === 'import'} onClose={closeModal} title="Import into Vault">
         <p className="mb-4">Select what you would like to import into <strong className="text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
         <div className="flex flex-col gap-3">

@@ -1,7 +1,9 @@
 import os
 import httpx
 import jwt
+import secrets
 from database import get_db
+from models.schemas import TokenRequest
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Security
 from fastapi.security.api_key import APIKeyHeader
@@ -118,30 +120,26 @@ def logout():
 
 
 def verify_access(request: Request, api_key: str = Security(api_key_header)):
-    """Universal lock: Accepts either a valid CLI header OR a valid Browser cookie."""
-
+    # 1. Check SQLite for CLI Tokens
     if api_key:
         conn = get_db()
         cursor = conn.execute("SELECT name FROM api_tokens WHERE token = ?", (api_key,))
-        token_record = cursor.fetchone()
+        row = cursor.fetchone()
         conn.close()
+        if row:
+            return f"agent:{row['name']}"
 
-        if token_record:
-            return f"cli_agent_{token_record['name']}"  # e.g., cli_agent_Windows_Terminal
-
-        # 2. Check for the Browser Cookie (React & Chrome Extension)
+    # 2. Check Cookie for Browser/Extension
     token = request.cookies.get("powder_session")
     if token:
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-            username = payload.get("sub")
-            if username in ALLOWED_USERS:
-                return username
-        except Exception:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            if payload.get("sub") in ALLOWED_USERS:
+                return payload.get("sub")
+        except:
             pass
 
-            # 3. If neither are valid, slam the door
-    raise HTTPException(status_code=401, detail="Red Team Alert: Unauthorized Access")
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @router.post("/logout")
@@ -155,3 +153,35 @@ def logout(response: Response):
         samesite="lax"
     )
     return {"message": "Successfully logged out"}
+
+
+router.post("/tokens")
+
+@router.post("/tokens")
+def generate_token(data: TokenRequest, user: str = Depends(verify_access)):
+    if ":" in user: raise HTTPException(status_code=403)  # Prevent CLI from making tokens
+
+    new_token = f"pwd_{secrets.token_hex(24)}"
+    conn = get_db()
+    conn.execute("INSERT INTO api_tokens (name, token) VALUES (?, ?)", (data.name, new_token))
+    conn.commit()
+    conn.close()
+    return {"token": new_token}
+
+
+@router.get("/tokens")
+def list_tokens(user: str = Depends(verify_access)):
+    conn = get_db()
+    cursor = conn.execute("SELECT id, name, created_at FROM api_tokens")
+    tokens = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return tokens
+
+
+@router.delete("/tokens/{token_id}")
+def revoke_token(token_id: int, user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.execute("DELETE FROM api_tokens WHERE id = ?", (token_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "revoked"}

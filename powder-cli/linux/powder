@@ -3,33 +3,45 @@ import sys
 import json
 import urllib.request
 import argparse
+import os
 
-# Set up the command line arguments
+# 1. Setup Arguments
 parser = argparse.ArgumentParser(description="Pipe terminal output to Powder Vault")
 parser.add_argument("title", nargs="?", default="Terminal Output", help="Title of the note")
+parser.add_argument("-t", "--token", help="API Token for authentication")
 args = parser.parse_args()
 
-# Read EVERYTHING from the piped standard input
-content = sys.stdin.read()
+# 2. Token Hierarchy: Argument > Environment Variable
+# Use the -t flag if provided, otherwise look for POWDER_TOKEN in the environment
+token = args.token or os.environ.get("POWDER_TOKEN")
 
-# Wrap it in a markdown code block so it renders like a terminal in the app
+if not token:
+    print("\n[-] Error: No API token provided.")
+    print("    Use -t 'pwd_...' or set the POWDER_TOKEN environment variable.")
+    sys.exit(1)
+
+# 3. Read Piped Input
+content = sys.stdin.read()
 formatted_content = f"```text\n{content}\n```"
 
-# Build the payload
+# 4. Build Payload
 payload = {
     "title": args.title,
     "content": formatted_content,
     "source": "CLI Pipeline"
 }
 
-# Shoot it to the Vault API
+# 5. Execute Request
 try:
     req = urllib.request.Request(
-        "http://127.0.0.1:8000/api/inbox",
+        "http://localhost:8000/api/inbox",
         data=json.dumps(payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json'}
+        headers={
+            'Content-Type': 'application/json',
+            'X-API-Key': token # Security header for the new SQLite system
+        }
     )
     urllib.request.urlopen(req)
     print(f"\n[+] Successfully piped to Vault: '_Inbox/{args.title.replace(' ', '_')}.md'")
 except Exception as e:
-    print(f"\n[-] Failed to reach Powder Vault. Is the server running? Error: {e}")
+    print(f"\n[-] Failed to reach Powder Vault. Error: {e}")
