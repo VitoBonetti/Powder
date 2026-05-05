@@ -227,6 +227,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [inputValue, setInputValue] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
 
   // NEW: Token Management State
   const [tokens, setTokens] = useState([]);
@@ -309,17 +310,37 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
     setActiveModal(null);
     setModalTarget(null);
     setNewToken("");
+    setSelectedTemplate("");
   };
 
-  const handleCreateNoteAction = () => {
+  const handleCreateNoteAction = async () => {
     if (!inputValue) return;
     const name = inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`;
     const fullPath = `${modalTarget}${name}`;
+    let initialContent = `# ${inputValue.replace('.md', '')}\n\nStart typing here...`;
+    if (selectedTemplate) {
+      try {
+        const res = await fetch(getApiUrl(`/notes/_Templates/${selectedTemplate}`), { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const now = new Date();
+
+          // Substitute variables
+          initialContent = data.content
+            .replace(/\{\{date\}\}/g, now.toISOString().split('T')[0]) // e.g., 2026-05-05
+            .replace(/\{\{time\}\}/g, now.toTimeString().split(' ')[0].substring(0, 5)) // e.g., 14:30
+            .replace(/\{\{title\}\}/g, inputValue.replace('.md', ''));
+        }
+      } catch (err) {
+        console.error("Failed to load template", err);
+      }
+    }
+
     fetch(getApiUrl(`/notes/${fullPath}`), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `# ${inputValue}\n\nStart typing here...` })
+      body: JSON.stringify({ content: initialContent })
     }).then(() => { fetchTree(); closeModal(); });
   };
 
@@ -523,7 +544,25 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
 
       <Modal isOpen={activeModal === 'createNote'} onClose={closeModal} title="Create New Note" actionLabel="Create Note" onAction={handleCreateNoteAction}>
         <p className="mb-3">Enter a name for the new Markdown file.</p>
-        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="My New Note" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
+        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="My New Note" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm mb-3" />
+
+        {/* Template Selector */}
+        {tree && tree.children && tree.children.find(c => c.name === '_Templates') && (
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Apply Template (Optional)</label>
+            <select
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="">-- No Template --</option>
+              {tree.children.find(c => c.name === '_Templates').children.filter(f => f.type === 'file').map(template => (
+                <option key={template.name} value={template.name}>{template.name}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-500 mt-1">Supports: {'{{date}}, {{time}}, {{title}}'}</p>
+          </div>
+        )}
       </Modal>
 
       <Modal isOpen={activeModal === 'createFolder'} onClose={closeModal} title="Create New Folder" actionLabel="Create Folder" onAction={handleCreateFolderAction}>
