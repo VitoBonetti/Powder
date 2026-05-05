@@ -18,6 +18,12 @@ function App() {
   const [activeFile, setActiveFile] = useState(null);
   const [openTabs, setOpenTabs] = useState([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchInitialQuery, setSearchInitialQuery] = useState("");
+
+  const handleTagClick = useCallback((tag) => {
+    setSearchInitialQuery(tag);
+    setIsSearchOpen(true);
+  }, []);
 
   const isImageFile = activeFile && activeFile.match(/\.(png|jpe?g|gif|webp|svg)$/i);
 
@@ -78,7 +84,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">
-      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} />
+      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
@@ -114,13 +120,13 @@ function App() {
             ) : isPreview ? (
               <Preview content={content} onLinkClick={handleLinkClick} />
             ) : (
-              <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} />
+              <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             )}
           </div>
         </div>
       </main>
 
-      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={openFileInTab} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} initialQuery={searchInitialQuery} />
     </div>
   );
 }

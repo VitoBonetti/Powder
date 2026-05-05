@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash } from 'lucide-react';
 import { getApiUrl, BACKEND_URL } from './config';
 
 // --- CUSTOM MODAL COMPONENT ---
@@ -239,6 +239,9 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const isResizing = useRef(false);
 
+  const [viewMode, setViewMode] = useState('files'); // 'files' or 'tags'
+  const [vaultTags, setVaultTags] = useState([]);
+
   const startResizing = useCallback(() => {
     isResizing.current = true;
     document.body.style.cursor = 'col-resize';
@@ -272,6 +275,11 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
       .then(res => res.json())
       .then(data => setTree(data))
       .catch(err => console.error("Failed to fetch tree:", err));
+
+    fetch(getApiUrl('/tags'), { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setVaultTags(data))
+      .catch(err => console.error("Failed to fetch tags:", err));
   };
 
   const fetchTokens = () => {
@@ -386,15 +394,42 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
       <input type="file" multiple accept=".md" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
       <input type="file" webkitdirectory="true" directory="true" ref={folderInputRef} onChange={handleFileUpload} className="hidden" />
 
-      <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0">
-        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Powder Vault</h2>
+      <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0 mt-2">
+        <div className="flex bg-gray-900 rounded-md p-1 w-full border border-gray-800">
+          <button onClick={() => setViewMode('files')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'files' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Files</button>
+          <button onClick={() => setViewMode('tags')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'tags' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Tags</button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
-        {tree ? (
-          <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} />
+        {viewMode === 'files' ? (
+          tree ? (
+            <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} />
+          ) : (
+            <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
+          )
         ) : (
-          <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
+          <div className="flex flex-col gap-1 px-2 mt-2">
+            {vaultTags.length === 0 ? (
+              <div className="text-gray-600 text-xs italic text-center mt-4">No tags found. Type #tag in a note to create one.</div>
+            ) : (
+              vaultTags.map((tagObj) => (
+                <div
+                  key={tagObj.tag}
+                  onClick={() => onTagClick(`#${tagObj.tag}`)}
+                  className="group flex items-center justify-between px-3 py-2 bg-gray-900/50 hover:bg-blue-900/30 border border-gray-800 hover:border-blue-800/50 rounded-lg cursor-pointer transition-all"
+                >
+                  <div className="flex items-center text-sm font-medium text-blue-400 group-hover:text-blue-300">
+                    <Hash className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+                    {tagObj.tag}
+                  </div>
+                  <span className="text-[10px] font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full group-hover:bg-blue-900/50 group-hover:text-blue-300">
+                    {tagObj.count}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 

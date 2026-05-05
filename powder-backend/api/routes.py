@@ -143,3 +143,21 @@ def add_to_inbox(item: InboxItem, user: str = Depends(verify_access)):
         return {"message": "Successfully ingested into Inbox", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tags")
+def list_all_tags(user: str = Depends(verify_access)):
+    """API Endpoint to fetch the tag cloud."""
+    try:
+        return file_system.get_all_tags()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search/tag")
+def search_by_tag(tag: str, user: str = Depends(verify_access)):
+    """API Endpoint to fetch files matching a specific tag."""
+    try:
+        return file_system.get_files_by_tag(tag)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

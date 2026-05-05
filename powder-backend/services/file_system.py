@@ -66,10 +66,19 @@ def save_note_content(file_path: str, content: str) -> str:
     except Timeout:
         raise PermissionError(f"File {file_path} is currently locked by another process. Please try again.")
 
-    # Update Search Index (SQLite handles its own internal concurrency locking)
+    # --- SQLITE INDEXING ---
     conn = get_db()
+
+    # 1. Update Search Index
     conn.execute("DELETE FROM search_index WHERE path = ?", (file_path,))
     conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (file_path, content))
+
+    # 2. Update Tags Index
+    conn.execute("DELETE FROM note_tags WHERE path = ?", (file_path,))
+    tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
+    for tag in tags:
+        conn.execute("INSERT INTO note_tags (path, tag) VALUES (?, ?)", (file_path, tag.lower()))
+
     conn.commit()
     conn.close()
 
@@ -274,6 +283,50 @@ def search_vault(query: str) -> list:
     return results
 
 
+def get_all_tags() -> list:
+    """Returns a list of all tags and how many files use them."""
+    conn = get_db()
+    try:
+        cursor = conn.execute("""
+                              SELECT tag, COUNT(path) as count
+                              FROM note_tags
+                              GROUP BY tag
+                              ORDER BY count DESC
+                              """)
+        # Convert the SQLite rows into a list of dictionaries
+        tags = [{"tag": row["tag"], "count": row["count"]} for row in cursor.fetchall()]
+        return tags
+    finally:
+        conn.close()
+
+
+def get_files_by_tag(tag: str) -> list:
+    """Returns all files that contain a specific tag."""
+    conn = get_db()
+    results = []
+    try:
+        # Join the tags table with the search index so we can grab a preview of the content
+        cursor = conn.execute("""
+                              SELECT n.path, s.content
+                              FROM note_tags n
+                                       LEFT JOIN search_index s ON n.path = s.path
+                              WHERE n.tag = ?
+                              """, (tag.lower(),))
+
+        for row in cursor:
+            content = row["content"] or ""
+            # Create a quick preview snippet of the first 100 characters
+            snippet = content[:100].replace('\n', ' ').strip() + "..."
+            results.append({
+                "name": row["path"].split("/")[-1],
+                "path": row["path"],
+                "snippet": snippet
+            })
+        return results
+    finally:
+        conn.close()
+
+
 def save_asset(filename: str, content: bytes) -> str:
     """Saves an image to the assets folder and returns the relative path."""
     assets_dir = VAULT_DIR / "assets"
@@ -420,10 +473,18 @@ def save_to_inbox(title: str, content: str, source: str = "") -> str:
     except Timeout:
         raise PermissionError(f"Inbox file {filename} is currently locked.")
 
-    # Update SQLite Index
+        # --- SQLITE INDEXING ---
     rel_path = f"_Inbox/{filename}"
     conn = get_db()
+
+    # 1. Update Search Index
     conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (rel_path, full_content))
+
+    # 2. Update Tags Index
+    tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', full_content))
+    for tag in tags:
+        conn.execute("INSERT INTO note_tags (path, tag) VALUES (?, ?)", (rel_path, tag.lower()))
+
     conn.commit()
     conn.close()
 

@@ -50,6 +50,19 @@ export default function Editor({ content, onChange, onLinkClick }) {
       })
     });
 
+    const tagDecorator = new MatchDecorator({
+      regexp: /#([a-zA-Z0-9_-]+)/g,
+      decoration: match => Decoration.mark({
+        class: 'cm-tag text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-900/40 hover:underline transition-colors',
+        attributes: { 'data-tag': match[0] } // captures the full #tag
+      })
+    });
+
+    const tagPlugin = ViewPlugin.fromClass(class {
+      constructor(view) { this.decorations = tagDecorator.createDeco(view); }
+      update(update) { this.decorations = tagDecorator.updateDeco(update, this.decorations); }
+    }, { decorations: v => v.decorations });
+
     const wikiLinkPlugin = ViewPlugin.fromClass(class {
       constructor(view) { this.decorations = wikiLinkDecorator.createDeco(view); }
       update(update) { this.decorations = wikiLinkDecorator.updateDeco(update, this.decorations); }
@@ -59,12 +72,21 @@ export default function Editor({ content, onChange, onLinkClick }) {
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       syntaxHighlighting(customMarkdownStyle),
       wikiLinkPlugin,
+      tagPlugin,
       EditorView.domEventHandlers({
         click(event) {
-          const el = event.target.closest('.cm-wiki-link');
-          if (el && el.hasAttribute('data-target')) {
+          // Check for WikiLinks
+          const linkEl = event.target.closest('.cm-wiki-link');
+          if (linkEl && linkEl.hasAttribute('data-target')) {
             event.preventDefault();
-            onLinkClick(el.getAttribute('data-target'));
+            onLinkClick(linkEl.getAttribute('data-target'));
+            return true;
+          }
+          // Check for Tags
+          const tagEl = event.target.closest('.cm-tag');
+          if (tagEl && tagEl.hasAttribute('data-tag')) {
+            event.preventDefault();
+            onTagClick(tagEl.getAttribute('data-tag'));
             return true;
           }
           return false;
