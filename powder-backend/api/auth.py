@@ -93,7 +93,7 @@ async def github_callback(code: str, response: Response):
     encoded_jwt = jwt.encode(jwt_data, JWT_SECRET, algorithm=ALGORITHM)
 
     # Step 5: Set the HttpOnly Cookie and Redirect back to React
-    redirect = RedirectResponse("http://localhost:5173/")  # Back to React App
+    redirect = RedirectResponse("/")  # Back to React App
     redirect.set_cookie(
         key="powder_session",
         value=encoded_jwt,
@@ -114,7 +114,7 @@ def check_session(user: str = Depends(get_current_user)):
 @router.get("/logout")
 def logout():
     """Destroys the session cookie."""
-    redirect = RedirectResponse("http://localhost:5173/login")
+    redirect = RedirectResponse("/login")
     redirect.delete_cookie("powder_session")
     return redirect
 
