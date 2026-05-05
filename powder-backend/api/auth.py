@@ -1,6 +1,7 @@
 import os
 import httpx
 import jwt
+from database import get_db
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Security
 from fastapi.security.api_key import APIKeyHeader
@@ -119,11 +120,16 @@ def logout():
 def verify_access(request: Request, api_key: str = Security(api_key_header)):
     """Universal lock: Accepts either a valid CLI header OR a valid Browser cookie."""
 
-    # 1. Check for the CLI / Extension Key First
-    if api_key and api_key == CLI_API_KEY:
-        return "cli_agent"
+    if api_key:
+        conn = get_db()
+        cursor = conn.execute("SELECT name FROM api_tokens WHERE token = ?", (api_key,))
+        token_record = cursor.fetchone()
+        conn.close()
 
-    # 2. Check for the Browser Cookie
+        if token_record:
+            return f"cli_agent_{token_record['name']}"  # e.g., cli_agent_Windows_Terminal
+
+        # 2. Check for the Browser Cookie (React & Chrome Extension)
     token = request.cookies.get("powder_session")
     if token:
         try:
@@ -132,7 +138,20 @@ def verify_access(request: Request, api_key: str = Security(api_key_header)):
             if username in ALLOWED_USERS:
                 return username
         except Exception:
-            pass  # Token invalid or expired, drop down to the 401 error
+            pass
 
-    # 3. If neither are valid, slam the door
+            # 3. If neither are valid, slam the door
     raise HTTPException(status_code=401, detail="Red Team Alert: Unauthorized Access")
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Destroys the session cookie."""
+    response.delete_cookie(
+        key="powder_session",
+        path="/",
+        domain=None,
+        httponly=True,
+        samesite="lax"
+    )
+    return {"message": "Successfully logged out"}

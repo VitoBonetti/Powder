@@ -60,8 +60,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn.textContent = 'Saving to Powder...';
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/inbox', {
+      const response = await fetch('http://localhost:8000/api/inbox', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: titleInput.value,

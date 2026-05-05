@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut } from 'lucide-react';
 
 // --- CUSTOM MODAL COMPONENT ---
-// (We made actionLabel optional so we can have buttons inside the modal instead of at the bottom)
 const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, actionVariant = "primary" }) => {
   const modalRef = useRef(null);
 
@@ -54,17 +53,15 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
   );
 };
 
-// --- Updated TreeNode with System Folder Protection ---
+// --- TreeNode Component ---
 const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const isFolder = node.type === 'folder';
   const isRoot = node.name === "Vault";
-
-  // NEW: Identify System Folders & Files
-  const isAssetsRoot = node.path === "assets"; // The main assets folder
-  const isAssetFolder = node.path === "assets" || node.path?.startsWith("assets/"); // Assets folder or any subfolder inside it
+  const isAssetsRoot = node.path === "assets";
+  const isAssetFolder = node.path === "assets" || node.path?.startsWith("assets/");
   const isImageFile = !isFolder && node.name.match(/\.(png|jpe?g|gif|webp|svg)$/i);
 
   const handleDragStart = (e) => {
@@ -89,41 +86,33 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
     setIsDragOver(false);
 
     if (!isFolder) return;
-
     const destPath = isRoot ? "" : node.path;
 
-    // --- NEW: 1. HANDLE EXTERNAL DESKTOP DRAG & DROP ---
-    // If files are present, it means it came from outside the browser!
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
-
       const formDataMd = new FormData();
       formDataMd.append('target_path', destPath);
       let hasMd = false;
 
       files.forEach(file => {
         if (file.type.startsWith("image/")) {
-          // Send images straight to the global assets folder
           const imgData = new FormData();
           imgData.append('file', file);
           fetch('http://localhost:8000/api/upload-asset', { method: 'POST', body: imgData, credentials: 'include' })
             .then(() => refreshTree());
         } else if (file.name.endsWith(".md")) {
-          // Send Markdown files to the specific folder we hovered over
           formDataMd.append('files', file, file.name);
           hasMd = true;
         }
       });
 
-      // Upload the markdown batch if we found any
       if (hasMd) {
         fetch('http://localhost:8000/api/upload', { method: 'POST', body: formDataMd, credentials: 'include' })
           .then(() => refreshTree());
       }
-      return; // Stop the function here so internal move logic doesn't fire
+      return;
     }
 
-    // --- 2. HANDLE INTERNAL FILE MOVING (Your existing code) ---
     const sourcePath = e.dataTransfer.getData('sourcePath');
     if (!sourcePath || sourcePath === destPath) return;
 
@@ -146,7 +135,6 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
         onClick={() => onFileSelect(node.path)}
       >
         <div className="flex items-center truncate">
-          {/* NEW: Show different icons for Images vs Text */}
           {isImageFile ? (
             <ImageIcon className="w-4 h-4 mr-2 text-purple-400 flex-shrink-0" />
           ) : (
@@ -164,7 +152,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   return (
     <div>
       <div
-        draggable={!isRoot && !isAssetsRoot} // Don't allow dragging the root assets folder
+        draggable={!isRoot && !isAssetsRoot}
         onDragStart={(!isRoot && !isAssetsRoot) ? handleDragStart : undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -176,26 +164,18 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
       >
         <div className="flex items-center truncate">
           {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
-
-          {/* Turn the Assets folder icon purple so it stands out as a system folder */}
           <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${isAssetsRoot ? 'text-purple-500' : 'text-blue-400'}`} />
           <span className="truncate">{node.name}</span>
         </div>
 
         <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2">
-
-          {/* ONLY show Import and New Note if it's NOT an asset folder */}
           {!isAssetFolder && (
             <>
               <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
               <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5" /></button>
             </>
           )}
-
-          {/* ALWAYS allow creating Subfolders (so you can organize images) */}
           <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5" /></button>
-
-          {/* Prevent deleting the Root Vault and the Root Assets folder */}
           {!isRoot && !isAssetsRoot && (
             <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" title="Delete" />
           )}
@@ -216,45 +196,36 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 // --- Main Sidebar Component ---
 export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const [tree, setTree] = useState(null);
-
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [inputValue, setInputValue] = useState("");
 
-  // Refs for the hidden file pickers
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
   const uploadTargetRef = useRef("");
 
-  // --- NEW: Resizable Sidebar State ---
-  const [sidebarWidth, setSidebarWidth] = useState(256); // Default 256px
+  const [sidebarWidth, setSidebarWidth] = useState(256);
   const isResizing = useRef(false);
 
-  // When you click the invisible edge
   const startResizing = useCallback(() => {
     isResizing.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }, []);
 
-  // When you move the mouse
   const resize = useCallback((e) => {
     if (isResizing.current) {
       const newWidth = e.clientX;
-      if (newWidth > 200 && newWidth < 600) {
-        setSidebarWidth(newWidth);
-      }
+      if (newWidth > 200 && newWidth < 600) setSidebarWidth(newWidth);
     }
   }, []);
 
-  // When you let go of the mouse
   const stopResizing = useCallback(() => {
     isResizing.current = false;
     document.body.style.cursor = 'default';
     document.body.style.userSelect = 'auto';
   }, []);
 
-  // Attach and detach the event listeners
   useEffect(() => {
     document.addEventListener('mousemove', resize);
     document.addEventListener('mouseup', stopResizing);
@@ -265,24 +236,14 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   }, [resize, stopResizing]);
 
   const fetchTree = () => {
-    fetch('http://localhost:8000/api/tree', {
-        credentials: 'include'
-    })
+    fetch('http://localhost:8000/api/tree', { credentials: 'include' })
       .then(res => res.json())
       .then(data => setTree(data))
       .catch(err => console.error("Failed to fetch tree:", err));
-};
+  };
 
-  useEffect(() => {
-    fetchTree();
-  }, []);
-
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      fetchTree();
-    }
-  }, [refreshTrigger]);
-
+  useEffect(() => { fetchTree(); }, []);
+  useEffect(() => { if (refreshTrigger > 0) fetchTree(); }, [refreshTrigger]);
   useEffect(() => {
     const handleFocus = () => fetchTree();
     window.addEventListener('focus', handleFocus);
@@ -301,7 +262,6 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
     setModalTarget(null);
   };
 
-  // --- API Action Handlers ---
   const handleCreateNoteAction = () => {
     if (!inputValue) return;
     const name = inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`;
@@ -331,54 +291,63 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
   const handleFileUpload = (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     const formData = new FormData();
     formData.append('target_path', uploadTargetRef.current);
-
     Array.from(files).forEach(file => {
       const path = file.webkitRelativePath || file.name;
       formData.append('files', file, path);
     });
-
-    fetch('http://localhost:8000/api/upload', {
-      method: 'POST',
-      credentials: 'include',
-      body: formData
-    })
-    .then(() => {
-      fetchTree();
-      e.target.value = null;
-    })
+    fetch('http://localhost:8000/api/upload', { method: 'POST', credentials: 'include', body: formData })
+    .then(() => { fetchTree(); e.target.value = null; })
     .catch(err => console.error("Upload failed:", err));
   };
 
+  const handleLogout = async () => {
+    try {
+        await fetch('http://localhost:8000/api/auth/logout', { method: 'POST', credentials: 'include' });
+        window.location.href = "/";
+    } catch (err) { console.error("Logout failed", err); }
+  };
+
   return (
-    // NEW: We replaced "w-64" with dynamic inline styling for the width, and added relative/flex-shrink-0
     <div
       style={{ width: `${sidebarWidth}px` }}
       className="h-screen bg-[#111319] border-r border-gray-800 p-4 flex flex-col z-20 relative flex-shrink-0"
     >
-
-      {/* NEW: The Drag Handle Line */}
       <div
         onMouseDown={startResizing}
         className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-50"
       />
 
-      {/* Hidden HTML5 File Pickers */}
       <input type="file" multiple accept=".md" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
       <input type="file" webkitdirectory="true" directory="true" ref={folderInputRef} onChange={handleFileUpload} className="hidden" />
 
-      <div className="flex items-center justify-between mb-4 px-2">
+      <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0">
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Powder Vault</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
-        {tree ? <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} /> : <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>}
+        {tree ? (
+          <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} />
+        ) : (
+          <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
+        )}
       </div>
 
-      {/* --- ALL CUSTOM MODALS --- */}
+      <div className="mt-auto pt-4 border-t border-gray-800 flex-shrink-0">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/10 rounded-md transition-all group"
+        >
+          <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+          <span className="font-medium">Logout</span>
+        </button>
+        <div className="mt-1 px-3 py-1 text-[10px] text-gray-600 uppercase tracking-widest">
+          Vault Secured
+        </div>
+      </div>
 
+      {/* --- MODALS --- */}
       <Modal isOpen={activeModal === 'import'} onClose={closeModal} title="Import into Vault">
         <p className="mb-4">Select what you would like to import into <strong className="text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
         <div className="flex flex-col gap-3">
@@ -405,7 +374,6 @@ export default function Sidebar({ onFileSelect, refreshTrigger }) {
         <p>Are you sure you want to permanently delete <strong className="text-white">'{modalTarget?.name}'</strong>?</p>
         <p className="mt-2 text-amber-400 text-xs bg-amber-950 p-2 rounded-md border border-amber-800">⚠️ This action cannot be undone and will delete all contents.</p>
       </Modal>
-
     </div>
   );
 }

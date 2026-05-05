@@ -4,7 +4,10 @@ from fastapi.staticfiles import StaticFiles
 from api.routes import router as api_router
 import api.auth as auth_routes
 from services.file_system import VAULT_DIR
+from database import init_db
 
+
+init_db()
 app = FastAPI(title="Powder Backend")
 
 (VAULT_DIR / "assets").mkdir(parents=True, exist_ok=True)
@@ -12,7 +15,7 @@ app.mount("/assets", StaticFiles(directory=VAULT_DIR / "assets"), name="assets")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "chrome-extension://phldinkeiemfggcaekcfkglndkdokjgj"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
