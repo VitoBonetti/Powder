@@ -18,7 +18,7 @@ const customMarkdownStyle = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
 ]);
 
-export default function Editor({ content, onChange, onLinkClick }) {
+export default function Editor({ content, onChange, onLinkClick, onTagClick }) {
 
   // Image Upload Logic
   const uploadImage = (file, view, pos) => {

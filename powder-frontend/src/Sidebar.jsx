@@ -222,7 +222,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
