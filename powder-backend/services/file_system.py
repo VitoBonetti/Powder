@@ -2,9 +2,11 @@ from pathlib import Path
 import shutil
 import time
 import re
+import sqlite3
 from datetime import datetime
 import urllib.request
 from urllib.parse import urlparse, urljoin
+from database import get_db
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,13 +38,21 @@ def read_note_content(file_path: str) -> str:
 
 
 def save_note_content(file_path: str, content: str) -> str:
-    """Saves a note and returns the final file path."""
+    """Saves a note, returns final path, and updates the search index."""
     if not file_path.endswith(".md"):
         file_path += ".md"
 
     target_file = VAULT_DIR / file_path
     target_file.parent.mkdir(parents=True, exist_ok=True)
     target_file.write_text(content, encoding="utf-8")
+
+    # Update Search Index
+    conn = get_db()
+    # Delete old entry if exists, then insert new (Handles both create and update)
+    conn.execute("DELETE FROM search_index WHERE path = ?", (file_path,))
+    conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (file_path, content))
+    conn.commit()
+    conn.close()
 
     return file_path
 
@@ -99,38 +109,59 @@ def create_folder(folder_path: str) -> str:
 
 
 def delete_item(item_path: str) -> bool:
-    """Deletes a file or an entire folder."""
+    """Deletes a file/folder and removes it from the search index."""
     target = VAULT_DIR / item_path
-
     if not str(target.resolve()).startswith(str(VAULT_DIR.resolve())):
         raise PermissionError("Access denied.")
-
     if not target.exists():
         raise FileNotFoundError("Item not found.")
 
-    if target.is_file():
-        target.unlink()  # Deletes a file
-    elif target.is_dir():
-        shutil.rmtree(target)  # Deletes a folder and everything inside it
+    conn = get_db()
 
+    if target.is_file():
+        target.unlink()
+        conn.execute("DELETE FROM search_index WHERE path = ?", (item_path,))
+    elif target.is_dir():
+        shutil.rmtree(target)
+        # Delete all files in the index that start with this directory path
+        conn.execute("DELETE FROM search_index WHERE path LIKE ?", (f"{item_path}/%",))
+
+    conn.commit()
+    conn.close()
     return True
 
 
 def update_links(old_path: str, new_path: str):
-    """Silently scans all markdown files and updates broken links."""
+    """Uses the index to find affected files, then updates only them."""
     old_link = old_path.replace("\\", "/")
     new_link = new_path.replace("\\", "/")
 
-    # Recursively find every .md file
-    for md_file in VAULT_DIR.rglob("*.md"):
-        try:
-            content = md_file.read_text(encoding="utf-8")
-            # If the old link exists in this file, replace it and save it!
-            if old_link in content:
+    conn = get_db()
+
+    try:
+        # Find ONLY the files that contain the old link by searching the index
+        # We wrap the exact path in quotes for FTS syntax
+        cursor = conn.execute(
+            "SELECT path FROM search_index WHERE search_index MATCH ?",
+            (f'"{old_link}"',)
+        )
+        affected_files = [row["path"] for row in cursor.fetchall()]
+
+        # Now only do expensive file I/O on the files that need it
+        for rel_path in affected_files:
+            md_file = VAULT_DIR / rel_path
+            if md_file.exists():
+                content = md_file.read_text(encoding="utf-8")
                 new_content = content.replace(old_link, new_link)
+
+                # Save it (this will automatically update the index via save_note_content logic,
+                # but to avoid circular dependencies, we do it directly here)
                 md_file.write_text(new_content, encoding="utf-8")
-        except Exception as e:
-            print(f"Error updating links in {md_file}: {e}")
+                conn.execute("UPDATE search_index SET content = ? WHERE path = ?", (new_content, rel_path))
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def move_item(source_path: str, destination_path: str) -> bool:
@@ -187,45 +218,38 @@ def save_uploaded_file(target_directory: str, filename: str, content: bytes) -> 
 
 
 def search_vault(query: str) -> list:
-    """Scans all markdown files for the given query and returns snippets."""
-    results = []
+    """Queries the SQLite FTS5 index instead of reading files."""
     if not query or not query.strip():
-        return results
+        return []
 
-    query_lower = query.lower()
+    conn = get_db()
+    results = []
 
-    # .rglob("*.md") recursively finds all markdown files in all subfolders
-    for md_file in VAULT_DIR.rglob("*.md"):
-        try:
-            # Read the file content
-            content = md_file.read_text(encoding="utf-8")
+    try:
+        # FTS5 MATCH syntax. The snippet() function automatically extracts context
+        # and wraps the matched term in HTML/Markdown tags.
+        # snippet(table, col_idx, start_tag, end_tag, ellipsis, max_tokens)
+        cursor = conn.execute("""
+            SELECT 
+                path, 
+                snippet(search_index, 1, '**', '**', '...', 15) as snippet 
+            FROM search_index 
+            WHERE search_index MATCH ?
+            ORDER BY rank
+            LIMIT 50
+        """, (query,))
 
-            # Case-insensitive search
-            if query_lower in content.lower():
-                # Find exactly where the match happened
-                match_index = content.lower().find(query_lower)
-
-                # Grab 40 characters before and after the match for context
-                start = max(0, match_index - 40)
-                end = min(len(content), match_index + len(query) + 40)
-
-                # Clean up the snippet so it's a single flat line
-                snippet = content[start:end].replace('\n', ' ')
-
-                if start > 0:
-                    snippet = "..." + snippet
-                if end < len(content):
-                    snippet = snippet + "..."
-
-                results.append({
-                    "name": md_file.name,
-                    "path": str(md_file.relative_to(VAULT_DIR)).replace("\\", "/"),
-                    "snippet": snippet
-                })
-        except Exception as e:
-            # If one file is corrupted, skip it and keep searching the rest
-            print(f"Error reading {md_file}: {e}")
-            continue
+        for row in cursor:
+            results.append({
+                "name": row["path"].split("/")[-1],
+                "path": row["path"],
+                "snippet": row["snippet"]
+            })
+    except sqlite3.OperationalError as e:
+        # Handles malformed FTS queries (e.g., if user types unescaped quotes)
+        print(f"Search error: {e}")
+    finally:
+        conn.close()
 
     return results
 

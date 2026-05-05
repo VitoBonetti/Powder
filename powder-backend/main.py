@@ -4,10 +4,11 @@ from fastapi.staticfiles import StaticFiles
 from api.routes import router as api_router
 import api.auth as auth_routes
 from services.file_system import VAULT_DIR
-from database import init_db
+from database import init_db, sync_search_index
 
 
 init_db()
+sync_search_index(VAULT_DIR)
 app = FastAPI(title="Powder Backend")
 
 (VAULT_DIR / "assets").mkdir(parents=True, exist_ok=True)
