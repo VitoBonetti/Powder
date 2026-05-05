@@ -17,12 +17,13 @@ const MermaidDiagram = ({ chart }) => {
   return <div ref={ref} className="my-6 flex justify-center" />;
 };
 
-export default function Preview({ content, onLinkClick }) {
+export default function Preview({ content, onLinkClick, onTagClick }) { // <-- Added onTagClick here
   return (
     <div className="prose prose-invert prose-lg max-w-none pb-20">
       <ReactMarkdown
         components={{
           a({node, href, children, ...props}) {
+            // 1. WikiLinks
             if (href?.startsWith('#wiki/')) {
               const targetName = decodeURIComponent(href.replace('#wiki/', ''));
               return (
@@ -38,6 +39,23 @@ export default function Preview({ content, onLinkClick }) {
                 </a>
               );
             }
+            // 2. Tags (NEW!)
+            if (href?.startsWith('#tag/')) {
+              const targetTag = decodeURIComponent(href.replace('#tag/', ''));
+              return (
+                <span
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onTagClick(`#${targetTag}`); // Opens the Search Modal!
+                  }}
+                  className="text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-900/40 hover:underline transition-colors"
+                >
+                  #{targetTag}
+                </span>
+              );
+            }
+            // 3. Normal Web Links
             return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline" {...props}>{children}</a>;
           },
           img({node, src, alt, ...props}) {
@@ -52,7 +70,10 @@ export default function Preview({ content, onLinkClick }) {
           }
         }}
       >
-        {content.replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[[${noteName}]](#wiki/${encodeURIComponent(noteName)})`)}
+        {content
+          .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[[${noteName}]](#wiki/${encodeURIComponent(noteName)})`)
+          .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[#${tag}](#tag/${tag})`)
+        }
       </ReactMarkdown>
     </div>
   );

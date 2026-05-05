@@ -118,7 +118,7 @@ function App() {
                 <p className="mt-4 text-gray-500 text-sm font-mono">{activeFile}</p>
               </div>
             ) : isPreview ? (
-              <Preview content={content} onLinkClick={handleLinkClick} />
+              <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             ) : (
               <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             )}
