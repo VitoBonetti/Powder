@@ -7,12 +7,23 @@ from datetime import datetime
 import urllib.request
 from urllib.parse import urlparse, urljoin
 from database import get_db
+from filelock import FileLock, Timeout
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Define our vault directory
 VAULT_DIR = BASE_DIR / "vault"
 VAULT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_lock(target_file: Path) -> FileLock:
+    """
+    Creates an OS-level lock file right next to the target file.
+    Example: MyNote.md -> MyNote.md.lock
+    Will wait up to 5 seconds to acquire the lock before raising a Timeout.
+    """
+    lock_path = target_file.with_name(target_file.name + ".lock")
+    return FileLock(lock_path, timeout=5)
 
 
 def get_all_notes() -> list[str]:
@@ -38,17 +49,22 @@ def read_note_content(file_path: str) -> str:
 
 
 def save_note_content(file_path: str, content: str) -> str:
-    """Saves a note, returns final path, and updates the search index."""
+    """Saves a note, returns final path, safely locked against concurrency."""
     if not file_path.endswith(".md"):
         file_path += ".md"
 
     target_file = VAULT_DIR / file_path
     target_file.parent.mkdir(parents=True, exist_ok=True)
-    target_file.write_text(content, encoding="utf-8")
 
-    # Update Search Index
+    try:
+        # ATOMIC WRITE: Acquire lock before touching the file
+        with _get_lock(target_file):
+            target_file.write_text(content, encoding="utf-8")
+    except Timeout:
+        raise PermissionError(f"File {file_path} is currently locked by another process. Please try again.")
+
+    # Update Search Index (SQLite handles its own internal concurrency locking)
     conn = get_db()
-    # Delete old entry if exists, then insert new (Handles both create and update)
     conn.execute("DELETE FROM search_index WHERE path = ?", (file_path,))
     conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (file_path, content))
     conn.commit()
@@ -132,32 +148,33 @@ def delete_item(item_path: str) -> bool:
 
 
 def update_links(old_path: str, new_path: str):
-    """Uses the index to find affected files, then updates only them."""
+    """Safely updates links using the SQLite index and FileLocks."""
     old_link = old_path.replace("\\", "/")
     new_link = new_path.replace("\\", "/")
 
     conn = get_db()
 
     try:
-        # Find ONLY the files that contain the old link by searching the index
-        # We wrap the exact path in quotes for FTS syntax
         cursor = conn.execute(
             "SELECT path FROM search_index WHERE search_index MATCH ?",
             (f'"{old_link}"',)
         )
         affected_files = [row["path"] for row in cursor.fetchall()]
 
-        # Now only do expensive file I/O on the files that need it
         for rel_path in affected_files:
             md_file = VAULT_DIR / rel_path
             if md_file.exists():
-                content = md_file.read_text(encoding="utf-8")
-                new_content = content.replace(old_link, new_link)
+                try:
+                    # ATOMIC READ/WRITE: Lock the file while we update links
+                    with _get_lock(md_file):
+                        content = md_file.read_text(encoding="utf-8")
+                        new_content = content.replace(old_link, new_link)
+                        md_file.write_text(new_content, encoding="utf-8")
 
-                # Save it (this will automatically update the index via save_note_content logic,
-                # but to avoid circular dependencies, we do it directly here)
-                md_file.write_text(new_content, encoding="utf-8")
-                conn.execute("UPDATE search_index SET content = ? WHERE path = ?", (new_content, rel_path))
+                    # Update index outside the file lock to keep lock time minimal
+                    conn.execute("UPDATE search_index SET content = ? WHERE path = ?", (new_content, rel_path))
+                except Timeout:
+                    print(f"Skipped link update for {rel_path}: File is locked.")
 
         conn.commit()
     finally:
@@ -332,7 +349,6 @@ def save_to_inbox(title: str, content: str, source: str = "") -> str:
     inbox_dir = VAULT_DIR / "_Inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Clean up the title so Windows/Mac doesn't crash on weird characters
     safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
     if not safe_title:
         safe_title = f"clip_{int(time.time())}"
@@ -340,21 +356,29 @@ def save_to_inbox(title: str, content: str, source: str = "") -> str:
     filename = f"{safe_title}.md"
     file_path = inbox_dir / filename
 
-    # 2. Prevent overwriting if you clip two things with the same exact title
+    # Prevent overwriting if clipped multiple times rapidly
     if file_path.exists():
         filename = f"{safe_title}_{int(time.time())}.md"
         file_path = inbox_dir / filename
 
     content = harvest_external_images(content, source)
 
-    # 3. Create a beautiful "Frontmatter" header with the metadata
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     header = f"---\nclipped: {timestamp}\nsource: {source}\n---\n\n"
-
     full_content = header + f"# {title}\n\n" + content
 
-    # 4. Save to the hard drive
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(full_content)
+    try:
+        # ATOMIC WRITE: Lock the inbox file
+        with _get_lock(file_path):
+            file_path.write_text(full_content, encoding="utf-8")
+    except Timeout:
+        raise PermissionError(f"Inbox file {filename} is currently locked.")
 
-    return f"_Inbox/{filename}"
+    # Update SQLite Index
+    rel_path = f"_Inbox/{filename}"
+    conn = get_db()
+    conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (rel_path, full_content))
+    conn.commit()
+    conn.close()
+
+    return rel_path
