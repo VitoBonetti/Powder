@@ -10,17 +10,45 @@
     input:focus, textarea:focus { outline: none; border-color: #58a6ff; }
     button { width: 100%; background: #238636; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background 0.2s;}
     button:hover { background: #2ea043; }
-    button:disabled { background: #234b2c; color: #8b949e; cursor: not-allowed; }
+    button.secondary { background: #21262d; border: 1px solid #30363d; }
+    button.secondary:hover { background: #30363d; }
     #status { margin-top: 10px; font-size: 12px; text-align: center; font-weight: 500; }
+    hr { border: 0; border-top: 1px solid #30363d; margin: 15px 0; }
+    .hidden { display: none !important; }
+    .settings-group label { font-size: 11px; color: #8b949e; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; }
   </style>
 </head>
 <body>
-  <h2>⚡ Powder Clipper</h2>
-  <input type="text" id="clip-title" placeholder="Note Title...">
-  <textarea id="clip-content" placeholder="Highlight some text on the page first, or type here..."></textarea>
-  <input type="text" id="clip-source" readonly style="color: #8b949e; font-size: 11px; background: transparent; border: none; padding: 0; margin-bottom: 15px;">
+  <h2>Powder Clipper</h2>
 
-  <button id="save-btn">Save to Vault</button>
+  <!-- UNLOCK SCREEN -->
+  <div id="unlock-screen" class="hidden">
+    <p style="font-size: 13px; color: #8b949e; margin-top: 0;">Vault is locked. Enter your PIN to decrypt your API key for this session.</p>
+    <input type="password" id="unlock-pin" placeholder="Enter Vault PIN">
+    <button id="unlock-btn">Unlock Vault</button>
+  </div>
+
+  <!-- CLIPPER SCREEN -->
+  <div id="clipper-screen" class="hidden">
+    <input type="text" id="clip-title" placeholder="Note Title...">
+    <textarea id="clip-content" placeholder="Highlight text or type here..."></textarea>
+    <input type="text" id="clip-source" readonly style="color: #8b949e; font-size: 11px; background: transparent; border: none; padding: 0; margin-bottom: 15px;">
+
+    <button id="save-btn">Save to Vault</button>
+
+    <hr>
+
+    <div class="settings-group">
+      <label>Server URL</label>
+      <input type="text" id="server-url" placeholder="http://localhost:8000">
+      <label>API Key (Will be encrypted)</label>
+      <input type="password" id="api-key" placeholder="Paste new key to update">
+      <label>Vault PIN (For encryption)</label>
+      <input type="password" id="setup-pin" placeholder="Create a short PIN">
+      <button id="save-settings-btn" class="secondary" style="padding: 6px;">Encrypt & Save Settings</button>
+    </div>
+  </div>
+
   <div id="status"></div>
 
   <script src="popup.js"></script>

@@ -1,10 +1,10 @@
 import React from 'react';
-import { BACKEND_URL } from './config';
+import { API_BASE_URL } from './config';
 
 export default function Login() {
   const handleLogin = () => {
     // Redirect the browser straight to our FastAPI GitHub bouncer
-    window.location.href = `${BACKEND_URL}/api/auth/login`;
+    window.location.href = `${API_BASE_URL}/auth/login`;
   };
 
   return (

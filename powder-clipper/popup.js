@@ -1,73 +1,248 @@
+// --- NATIVE WEB CRYPTO ENGINE ---
+const CryptoManager = {
+  generateBuffer: (length) => crypto.getRandomValues(new Uint8Array(length)),
+
+  deriveKey: async (pin, salt) => {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw", enc.encode(pin), { name: "PBKDF2" }, false, ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+      keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+    );
+  },
+
+  encrypt: async (text, pin) => {
+    const salt = CryptoManager.generateBuffer(16);
+    const iv = CryptoManager.generateBuffer(12);
+    const key = await CryptoManager.deriveKey(pin, salt);
+    const enc = new TextEncoder();
+
+    const cipherBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv }, key, enc.encode(text)
+    );
+
+    return {
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(cipherBuffer))),
+      salt: btoa(String.fromCharCode(...salt)),
+      iv: btoa(String.fromCharCode(...iv))
+    };
+  },
+
+  decrypt: async (cipherObj, pin) => {
+    try {
+      const salt = new Uint8Array(atob(cipherObj.salt).split('').map(c => c.charCodeAt(0)));
+      const iv = new Uint8Array(atob(cipherObj.iv).split('').map(c => c.charCodeAt(0)));
+      const ciphertext = new Uint8Array(atob(cipherObj.ciphertext).split('').map(c => c.charCodeAt(0)));
+
+      const key = await CryptoManager.deriveKey(pin, salt);
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv }, key, ciphertext
+      );
+
+      const dec = new TextDecoder();
+      return dec.decode(decryptedBuffer);
+    } catch (e) {
+      throw new Error("Invalid PIN or corrupted data");
+    }
+  }
+};
+
+// --- EXTENSION LOGIC ---
 document.addEventListener('DOMContentLoaded', async () => {
-  const titleInput = document.getElementById('clip-title');
-  const contentInput = document.getElementById('clip-content');
-  const sourceInput = document.getElementById('clip-source');
-  const saveBtn = document.getElementById('save-btn');
+  const unlockScreen = document.getElementById('unlock-screen');
+  const clipperScreen = document.getElementById('clipper-screen');
   const statusDiv = document.getElementById('status');
 
-  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-  titleInput.value = tab.title;
-  sourceInput.value = tab.url;
-
-  // --- NEW: THE HTML-TO-MARKDOWN COMPILER ---
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    function: () => {
-      const sel = window.getSelection();
-      if (!sel.rangeCount || sel.toString().trim() === "") return ""; // Nothing highlighted
-
-      // ... (Keep your existing HTML-to-Markdown Regex logic here) ...
-      const container = document.createElement("div");
-      container.appendChild(sel.getRangeAt(0).cloneContents());
-
-      let md = container.innerHTML
-        .replace(/<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi, '\n![$2]($1)\n')
-        .replace(/<img[^>]*src="([^"]+)"[^>]*>/gi, '\n![]($1)\n')
-        .replace(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-        .replace(/<(b|strong)[^>]*>(.*?)<\/\1>/gi, '**$2**')
-        .replace(/<(i|em)[^>]*>(.*?)<\/\1>/gi, '*$2*')
-        .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (m, lvl, txt) => '\n\n' + '#'.repeat(lvl) + ' ' + txt + '\n\n')
-        .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
-        .replace(/<br[^>]*>/gi, '\n')
-        .replace(/<[^>]+>/g, '');
-
-      const decoder = document.createElement('textarea');
-      decoder.innerHTML = md;
-      return decoder.value.trim().replace(/\n{3,}/g, '\n\n');
+  // 1. FAIL-SAFE INITIALIZATION
+  try {
+    if (!chrome.storage) {
+      throw new Error("Storage permission denied! Please reload extension in chrome://extensions.");
     }
-  }, async (results) => {
-    let capturedText = results && results[0] ? results[0].result : "";
 
-    // THE CLIPBOARD FALLBACK
-    if (!capturedText) {
-      try {
-        const clipboardText = await navigator.clipboard.readText();
-        if (clipboardText) {
-          capturedText = "> *Pasted from Clipboard*\n\n" + clipboardText;
-        }
-      } catch (err) {
-        console.warn("Could not read clipboard", err);
+    const storageEngine = chrome.storage.session || chrome.storage.local;
+    const session = await storageEngine.get(['activeApiKey', 'serverUrl']);
+
+    if (session.activeApiKey) {
+      document.getElementById('server-url').value = session.serverUrl || 'http://localhost:8000';
+      document.getElementById('api-key').placeholder = "•••••••••••• (Encrypted)";
+      showClipper();
+    } else {
+      const local = await chrome.storage.local.get(['encryptedApiData']);
+      if (local.encryptedApiData) {
+        unlockScreen.classList.remove('hidden');
+      } else {
+        showClipper();
       }
     }
+  } catch (err) {
+    statusDiv.textContent = `Startup Error: ${err.message}`;
+    statusDiv.style.color = '#f85149';
+    return;
+  }
 
-    contentInput.value = capturedText;
-  });
+  function showClipper() {
+    unlockScreen.classList.add('hidden');
+    clipperScreen.classList.remove('hidden');
+    populateClipperData();
+  }
 
-  // Save Button Logic (Unchanged)
-  saveBtn.addEventListener('click', async () => {
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving to Powder...';
+  // --- UNLOCK LOGIC ---
+  document.getElementById('unlock-btn').addEventListener('click', async () => {
+    const pin = document.getElementById('unlock-pin').value;
+    const local = await chrome.storage.local.get(['encryptedApiData', 'serverUrl']);
 
     try {
-      const response = await fetch('http://localhost:8000/api/inbox', {
+      const decryptedKey = await CryptoManager.decrypt(local.encryptedApiData, pin);
+      const storageEngine = chrome.storage.session || chrome.storage.local;
+      await storageEngine.set({ activeApiKey: decryptedKey, serverUrl: local.serverUrl });
+
+      document.getElementById('server-url').value = local.serverUrl || 'http://localhost:8000';
+      document.getElementById('api-key').placeholder = "•••••••••••• (Encrypted)";
+      statusDiv.textContent = '';
+      showClipper();
+    } catch (err) {
+      statusDiv.textContent = 'Incorrect PIN.';
+      statusDiv.style.color = '#f85149';
+    }
+  });
+
+  // --- SAVE SETTINGS LOGIC (ENCRYPTION) ---
+  document.getElementById('save-settings-btn').addEventListener('click', async () => {
+    const serverUrl = document.getElementById('server-url').value.replace(/\/$/, '');
+    const apiKey = document.getElementById('api-key').value.trim();
+    const pin = document.getElementById('setup-pin').value;
+
+    if (!apiKey || !pin) {
+      statusDiv.textContent = 'Provide both an API Key and a PIN to encrypt it.';
+      statusDiv.style.color = '#f85149';
+      return;
+    }
+
+    try {
+      const encryptedData = await CryptoManager.encrypt(apiKey, pin);
+      await chrome.storage.local.set({ encryptedApiData: encryptedData, serverUrl: serverUrl });
+
+      const storageEngine = chrome.storage.session || chrome.storage.local;
+      await storageEngine.set({ activeApiKey: apiKey, serverUrl: serverUrl });
+
+      document.getElementById('api-key').value = '';
+      document.getElementById('setup-pin').value = '';
+      document.getElementById('api-key').placeholder = "•••••••••••• (Encrypted)";
+      statusDiv.textContent = '';
+
+      const btn = document.getElementById('save-settings-btn');
+      btn.textContent = "Encrypted & Saved!";
+      setTimeout(() => btn.textContent = "Encrypt & Save Settings", 2000);
+    } catch (err) {
+      statusDiv.textContent = 'Encryption failed.';
+      statusDiv.style.color = '#f85149';
+    }
+  });
+
+  // --- CLIPPING LOGIC ---
+  async function populateClipperData() {
+    try {
+      let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) return;
+
+      document.getElementById('clip-title').value = tab.title || "New Clip";
+      document.getElementById('clip-source').value = tab.url || "";
+
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: () => {
+          const sel = window.getSelection();
+          if (!sel.rangeCount || sel.toString().trim() === "") return "";
+
+          const container = document.createElement("div");
+          container.appendChild(sel.getRangeAt(0).cloneContents());
+
+          // --- THE DOM FIX: Clean URLs before Regex ---
+          container.querySelectorAll('img').forEach(img => {
+            // currentSrc gets the actual image the browser is displaying (bypasses srcset/lazy loading)
+            let realSrc = img.currentSrc || img.src || img.getAttribute('data-src');
+
+            // Force absolute URL safely
+            const a = document.createElement('a');
+            a.href = realSrc;
+            img.setAttribute('src', a.href);
+
+            // NUKE responsive tags so they don't break the Markdown Regex
+            img.removeAttribute('srcset');
+            img.removeAttribute('sizes');
+            img.removeAttribute('data-src');
+            img.removeAttribute('loading');
+          });
+
+          container.querySelectorAll('a').forEach(a => {
+            const href = a.getAttribute('href');
+            if (href && (href.startsWith('/') || href.startsWith('#'))) {
+              const textNode = document.createTextNode(a.textContent);
+              a.replaceWith(textNode);
+            } else {
+              a.setAttribute('href', a.href);
+            }
+          });
+          // --- END DOM FIX ---
+
+          let md = container.innerHTML
+            .replace(/<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi, '\n![$2]($1)\n')
+            .replace(/<img[^>]*src="([^"]+)"[^>]*>/gi, '\n![]($1)\n')
+            .replace(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+            .replace(/<(b|strong)[^>]*>(.*?)<\/\1>/gi, '**$2**')
+            .replace(/<(i|em)[^>]*>(.*?)<\/\1>/gi, '*$2*')
+            .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (m, lvl, txt) => '\n\n' + '#'.repeat(lvl) + ' ' + txt + '\n\n')
+            .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
+            .replace(/<br[^>]*>/gi, '\n')
+            .replace(/<[^>]+>/g, '');
+
+          const decoder = document.createElement('textarea');
+          decoder.innerHTML = md;
+          return decoder.value.trim().replace(/\n{3,}/g, '\n\n');
+        }
+      }, async (results) => {
+        let capturedText = results && results[0] ? results[0].result : "";
+        if (!capturedText) {
+          try {
+            const clipboardText = await navigator.clipboard.readText();
+            if (clipboardText) capturedText = "> *Pasted from Clipboard*\n\n" + clipboardText;
+          } catch (err) {}
+        }
+        document.getElementById('clip-content').value = capturedText;
+      });
+    } catch (err) {
+      console.warn("Could not query tab data", err);
+    }
+  }
+
+  // --- SAVE TO VAULT ---
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    const storageEngine = chrome.storage.session || chrome.storage.local;
+    const session = await storageEngine.get(['activeApiKey', 'serverUrl']);
+
+    if (!session.activeApiKey) {
+      statusDiv.textContent = 'Error: Vault is locked or Key is missing.';
+      statusDiv.style.color = '#f85149';
+      return;
+    }
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving to Powder...';
+
+    try {
+      const response = await fetch(`${session.serverUrl}/api/inbox`, {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': session.activeApiKey
+        },
         body: JSON.stringify({
-          title: titleInput.value,
-          content: contentInput.value,
-          source: sourceInput.value
+          title: document.getElementById('clip-title').value,
+          content: document.getElementById('clip-content').value,
+          source: document.getElementById('clip-source').value
         })
       });
 
@@ -79,10 +254,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error('Backend rejected the payload.');
       }
     } catch (err) {
-      statusDiv.textContent = 'Error: Is your Python server running?';
+      statusDiv.textContent = 'Error: Check URL or Server Status.';
       statusDiv.style.color = '#f85149';
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Retry Save';
+      btn.disabled = false;
+      btn.textContent = 'Retry Save';
     }
   });
 });

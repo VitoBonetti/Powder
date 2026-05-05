@@ -2,8 +2,11 @@
   "manifest_version": 3,
   "name": "Powder Clipper",
   "version": "1.0",
-  "permissions": ["activeTab", "scripting", "clipboardRead"],
-  "host_permissions": ["http://localhost:8000/*"],
+  "permissions": ["activeTab", "scripting", "clipboardRead", "storage"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://*/*"
+  ],
   "action": {
     "default_popup": "popup.html"
   }

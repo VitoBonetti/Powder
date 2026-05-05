@@ -1,4 +1,7 @@
 from pathlib import Path
+import httpx
+import mimetypes
+import base64
 import shutil
 import time
 import re
@@ -311,35 +314,78 @@ def resolve_wiki_link(target: str) -> str:
 
 
 def harvest_external_images(content: str, source_url: str) -> str:
-    """Scans markdown for external images, downloads them, and updates the links to local assets."""
+    """Scans markdown for external images, downloads them via HTTPX, and updates links."""
     matches = re.findall(r'!\[([^\]]*)\]\(([^)]+)\)', content)
 
     for alt, url in matches:
         if url.startswith("assets/"):
             continue
 
+        # 1. Base64 Data URIs (Lazy-load fallbacks)
+        if url.startswith("data:image"):
+            try:
+                header, encoded = url.split(",", 1)
+                mime_type = header.split(";")[0].split(":")[1]
+                ext = mimetypes.guess_extension(mime_type) or ".png"
+                image_bytes = base64.b64decode(encoded)
+
+                # Check for empty decodes
+                if len(image_bytes) > 100:
+                    filename = f"embedded_data{ext}"
+                    local_path = save_asset(filename, image_bytes)
+                    content = content.replace(f"![{alt}]({url})", f"![{alt}]({local_path})")
+            except Exception:
+                pass
+            continue
+
+        # 2. Standard Web Images
         fetch_url = urljoin(source_url, url)
         if fetch_url.startswith("//"):
             fetch_url = "https:" + fetch_url
 
         try:
-            req = urllib.request.Request(fetch_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req) as response:
-                image_bytes = response.read()
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+            }
 
+            # Using HTTPX instead of urllib for robust TLS and redirect handling
+            with httpx.Client(follow_redirects=True, verify=False) as client:
+                response = client.get(fetch_url, headers=headers, timeout=10.0)
+
+                if response.status_code != 200:
+                    print(f"Blocked by server {fetch_url}: {response.status_code}")
+                    continue
+
+                content_type = response.headers.get('Content-Type', '')
+                if not content_type.startswith('image/'):
+                    print(f"Not an image {fetch_url}: {content_type}")
+                    continue
+
+                image_bytes = response.content
+
+                # PREVENT EMPTY IMAGES
+                if len(image_bytes) < 100:
+                    print(f"Image too small/empty {fetch_url}")
+                    continue
+
+            # Clean filename
             parsed_url = urlparse(fetch_url)
-            filename = parsed_url.path.split("/")[-1]
-            if not filename:
-                filename = "harvested_image.png"
+            clean_path = urllib.parse.unquote(parsed_url.path)
+            filename = clean_path.split("/")[-1]
+
+            if not filename or '.' not in filename:
+                ext = mimetypes.guess_extension(content_type) or ".png"
+                filename = f"harvested_image{ext}"
+
+            filename = re.sub(r'[\\/*?:"<>|]', "", filename)
 
             local_path = save_asset(filename, image_bytes)
-
-            old_markdown = f"![{alt}]({url})"
-            new_markdown = f"![{alt}]({local_path})"
-            content = content.replace(old_markdown, new_markdown)
+            content = content.replace(f"![{alt}]({url})", f"![{alt}]({local_path})")
 
         except Exception as e:
-            print(f"Harvester failed to download {fetch_url}: {e}")
+            print(f"Harvester failed to download {fetch_url}: {str(e)}")
+            # Fails gracefully: the markdown will just keep the original web URL
 
     return content
 
