@@ -68,7 +68,7 @@ export default function Preview({ content, onLinkClick, onTagClick }) {
               let Icon = Info;
               let colors = "border-blue-500 text-blue-400 bg-blue-900/10"; // Default (Info/Note)
 
-              if (['note'].includes(type)) { Icon = Pencil; colors = "border-indigo-500 text-indigo-400 bg-indigo-900/10"; }
+              if (['note'].includes(type)) { Icon = Pencil; colors = "border-olive-500 text-olive-400 bg-olive-900/10"; }
               else if (['vuln', 'bug', 'bugs'].includes(type)) { Icon = Bug; colors = "border-red-500 text-red-300 bg-red-500/10"; }
               else if (['rem', 'remediation', 'bugoff' ].includes(type)) { Icon = Bandage; colors = "border-sky-500 text-sky-400 bg-sky-900/10"; }
               else if (['tip', 'hint'].includes(type)) { Icon = Lightbulb; colors = "border-emerald-500 text-emerald-400 bg-emerald-900/10"; }
