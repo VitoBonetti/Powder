@@ -10,7 +10,7 @@ import GraphView from './components/GraphView';
 import CanvasView from './components/canvas/CanvasView';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
-import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
+import { Eye, Edit3, Columns, Network, Map, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -212,6 +212,13 @@ function App() {
               className={`p-1.5 rounded transition-colors ${viewMode === 'graph' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
             >
               <Network className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('canvas')}
+              title="Pentest Canvas"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'canvas' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Map className="w-4 h-4" />
             </button>
           </div>
         )}
