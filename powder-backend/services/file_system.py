@@ -149,10 +149,12 @@ def delete_item(item_path: str) -> bool:
     if target.is_file():
         target.unlink()
         conn.execute("DELETE FROM search_index WHERE path = ?", (item_path,))
+        conn.execute("DELETE FROM note_tags WHERE path = ?", (item_path,))
     elif target.is_dir():
         shutil.rmtree(target)
         # Delete all files in the index that start with this directory path
         conn.execute("DELETE FROM search_index WHERE path LIKE ?", (f"{item_path}/%",))
+        conn.execute("DELETE FROM note_tags WHERE path LIKE ?", (f"{item_path}/%",))
 
     conn.commit()
     conn.close()
