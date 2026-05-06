@@ -2,6 +2,8 @@ import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import mermaid from 'mermaid';
 import { BACKEND_URL } from '../config';
+import remarkGfm from 'remark-gfm';
+import { remarkAlert } from 'remark-github-blockquote-alert';
 
 const MermaidDiagram = ({ chart }) => {
   const ref = useRef(null);
@@ -21,6 +23,7 @@ export default function Preview({ content, onLinkClick, onTagClick }) { // <-- A
   return (
     <div className="prose prose-invert prose-lg max-w-none pb-20">
       <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkAlert]}
         components={{
           a({node, href, children, ...props}) {
             // 1. WikiLinks

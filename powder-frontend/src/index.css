@@ -33,3 +33,43 @@ body {
 .powder-editor .cm-line {
   padding-bottom: 2px;
 }
+
+/* --- GITHUB ALERTS STYLING --- */
+.markdown-alert {
+  padding: 12px 16px;
+  margin: 24px 0;
+  border-left: 4px solid;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.markdown-alert-title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.95em;
+}
+
+.markdown-alert p {
+  margin: 0 !important;
+  font-size: 0.95em;
+  color: #c9d1d9;
+}
+
+/* Alert Colors */
+.markdown-alert-note { border-color: #3b82f6; }
+.markdown-alert-note .markdown-alert-title { color: #3b82f6; }
+
+.markdown-alert-tip { border-color: #10b981; }
+.markdown-alert-tip .markdown-alert-title { color: #10b981; }
+
+.markdown-alert-important { border-color: #8b5cf6; }
+.markdown-alert-important .markdown-alert-title { color: #8b5cf6; }
+
+.markdown-alert-warning { border-color: #f59e0b; }
+.markdown-alert-warning .markdown-alert-title { color: #f59e0b; }
+
+.markdown-alert-caution { border-color: #ef4444; }
+.markdown-alert-caution .markdown-alert-title { color: #ef4444; }
