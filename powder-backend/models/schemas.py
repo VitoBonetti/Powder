@@ -23,3 +23,8 @@ class TokenRequest(BaseModel):
 class RenameNote(BaseModel):
     old_path: str
     new_name: str
+
+
+class PositionData(BaseModel):
+    x: int
+    y: int

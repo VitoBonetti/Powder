@@ -13,6 +13,7 @@ from services.parsers import route_and_parse
 from database import get_db
 from filelock import FileLock, Timeout
 from fastapi import BackgroundTasks
+import frontmatter
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -610,3 +611,78 @@ command: "{parsed_data['command']}"
     conn.close()
 
     return rel_path
+
+
+def get_canvas_data() -> dict:
+    """Scans the vault for Pentest nodes and returns them formatted for React Flow."""
+    nodes = []
+    edges = []
+
+    # 1. Build a quick lookup map of all files to resolve WikiLinks into edges
+    conn = get_db()
+    cursor = conn.execute("SELECT path, content FROM search_index")
+    rows = cursor.fetchall()
+    conn.close()
+
+    file_map = {row["path"].split("/")[-1].replace(".md", "").lower(): row["path"] for row in rows}
+
+    # 2. Find all pentest nodes
+    for file_path in VAULT_DIR.rglob("*.md"):
+        rel_path = str(file_path.relative_to(VAULT_DIR)).replace("\\", "/")
+
+        # Skip templates
+        if "_Templates" in rel_path:
+            continue
+
+        try:
+            # Parse the frontmatter
+            post = frontmatter.load(file_path)
+
+            # We ONLY put files on the Canvas that have 'type: pentest_node'
+            if post.get('type') == 'pentest_node':
+                # Map to React Flow node format
+                nodes.append({
+                    "id": rel_path,
+                    "type": post.get('node_type', 'sticky_note'),
+                    "position": {
+                        "x": int(post.get('x', 0)),
+                        "y": int(post.get('y', 0))
+                    },
+                    "data": {
+                        "note": post.content,
+                        "color": post.get('color', '#fef08a'),
+                        "title": rel_path.split("/")[-1].replace(".md", "")
+                    }
+                })
+
+                # 3. Extract WikiLinks and convert them to React Flow Edges!
+                wiki_links = set(re.findall(r'\[\[(.*?)\]\]', post.content))
+                for wl in wiki_links:
+                    target_key = wl.lower().split('/')[-1]
+                    target_path = file_map.get(target_key)
+                    if target_path:
+                        edges.append({
+                            "id": f"e-{rel_path}-{target_path}",
+                            "source": rel_path,
+                            "target": target_path,
+                            "animated": True,  # Gives a cool hacking data-flow effect
+                            "style": {"stroke": "#3b82f6", "strokeWidth": 2}
+                        })
+        except Exception as e:
+            # If a file is malformed, just skip it
+            continue
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def update_node_position(rel_path: str, x: int, y: int):
+    """Safely updates just the X/Y frontmatter of a node without touching content."""
+    target_file = VAULT_DIR / rel_path
+    if not target_file.exists():
+        raise FileNotFoundError("Node file not found")
+
+    with _get_lock(target_file):
+        post = frontmatter.load(target_file)
+        post.metadata['x'] = x
+        post.metadata['y'] = y
+        target_file.write_text(frontmatter.dumps(post), encoding="utf-8")

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, 
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
-from models.schemas import NoteData, MoveData, InboxItem, RenameNote
+from models.schemas import NoteData, MoveData, InboxItem, RenameNote, PositionData
 from services import file_system
 from services.file_system import VAULT_DIR
 from api.auth import verify_access
@@ -209,3 +209,24 @@ async def import_pentest_scan(file: UploadFile = File(...), user: str = Depends(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process scan: {str(e)}")
+
+
+@router.get("/canvas/data")
+def fetch_canvas_data(user: str = Depends(verify_access)):
+    """Returns all nodes and edges for the React Flow canvas."""
+    try:
+        return file_system.get_canvas_data()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/canvas/node/{file_path:path}/position")
+def update_canvas_node_position(file_path: str, pos: PositionData, user: str = Depends(verify_access)):
+    """Triggered when the user lets go of a node after dragging it."""
+    try:
+        file_system.update_node_position(file_path, pos.x, pos.y)
+        return {"status": "success"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Node file not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
