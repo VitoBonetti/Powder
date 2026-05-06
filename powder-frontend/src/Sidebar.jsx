@@ -363,6 +363,15 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
+  useEffect(() => {
+    const handleGlobalAction = (e) => {
+      if (e.detail.action === 'cmd-settings') openModal('settings');
+      if (e.detail.action === 'cmd-new-note') openModal('createNote', '');
+    };
+    window.addEventListener('powder-action', handleGlobalAction);
+    return () => window.removeEventListener('powder-action', handleGlobalAction);
+  }, []);
+
   const openModal = (type, target) => {
     setInputValue("");
     setModalTarget(target);

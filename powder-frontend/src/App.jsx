@@ -23,6 +23,32 @@ function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const editorViewRef = useRef(null);
 
+  // Handle Global Commands dispatched from the Omnibar
+  const handleGlobalCommand = async (commandId) => {
+    switch(commandId) {
+      case 'cmd-logout':
+        try {
+          await fetch(getApiUrl('/auth/logout'), { method: 'POST', credentials: 'include' });
+          window.location.href = "/";
+        } catch (err) { console.error("Logout failed", err); }
+        break;
+      case 'cmd-reindex':
+        fetch(getApiUrl('/reindex'), { method: 'POST', credentials: 'include' })
+          .then(() => alert("Database successfully rebuilt!"))
+          .catch(err => alert("Failed to rebuild: " + err));
+        break;
+      case 'cmd-settings':
+      case 'cmd-new-note':
+        // Note: Currently these Modals live inside Sidebar.jsx.
+        // For a seamless V1 integration, we can dispatch a custom event that Sidebar listens to,
+        // or we alert the user. The ideal future refactor is lifting Sidebar's Modals into App.jsx.
+        window.dispatchEvent(new CustomEvent('powder-action', { detail: { action: commandId } }));
+        break;
+      default:
+        console.warn("Unknown command:", commandId);
+    }
+  };
+
   const handleTagClick = useCallback((tag) => {
     setSearchInitialQuery(tag);
     setIsSearchOpen(true);
@@ -190,7 +216,7 @@ function App() {
         </div>
       </main>
 
-      <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} initialQuery={searchInitialQuery} />
+      <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} onCommand={handleGlobalCommand} initialQuery={searchInitialQuery} />
       <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} onSelect={handleInsertTemplate} />
     </div>
   );
