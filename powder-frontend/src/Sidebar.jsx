@@ -178,7 +178,8 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   const creationBasePath = isRoot ? "" : `${node.path}/`;
 
   return (
-    <div
+    <div>
+      <div
         draggable={!isRoot && !isAssetsRoot}
         onDragStart={(!isRoot && !isAssetsRoot) ? handleDragStart : undefined}
         onDragOver={handleDragOver}
