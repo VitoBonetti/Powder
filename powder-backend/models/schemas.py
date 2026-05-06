@@ -28,3 +28,8 @@ class RenameNote(BaseModel):
 class PositionData(BaseModel):
     x: int
     y: int
+
+
+class EdgeData(BaseModel):
+    source: str
+    target: str

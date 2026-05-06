@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, 
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
-from models.schemas import NoteData, MoveData, InboxItem, RenameNote, PositionData
+from models.schemas import NoteData, MoveData, InboxItem, RenameNote, PositionData, EdgeData
 from services import file_system
 from services.file_system import VAULT_DIR
 from api.auth import verify_access
@@ -228,5 +228,14 @@ def update_canvas_node_position(file_path: str, pos: PositionData, user: str = D
         return {"status": "success"}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Node file not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/canvas/edge")
+def create_canvas_edge(data: EdgeData, user: str = Depends(verify_access)):
+    """Writes a WikiLink into the source markdown file to represent an edge."""
+    try:
+        file_system.create_edge(data.source, data.target)
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -686,3 +686,26 @@ def update_node_position(rel_path: str, x: int, y: int):
         post.metadata['x'] = x
         post.metadata['y'] = y
         target_file.write_text(frontmatter.dumps(post), encoding="utf-8")
+
+
+def create_edge(source_path: str, target_path: str):
+    """Appends a WikiLink to the bottom of the source file."""
+    source_file = VAULT_DIR / source_path
+    if not source_file.exists():
+        raise FileNotFoundError("Source node not found")
+
+    # Extract the target's clean name for the WikiLink (e.g., "Scans/Nmap_123.md" -> "Nmap_123")
+    target_name = target_path.split("/")[-1].replace(".md", "")
+    wiki_link = f"\n[[{target_name}]]\n"
+
+    with _get_lock(source_file):
+        # We don't need frontmatter.load here, we just append to the raw file!
+        with open(source_file, "a", encoding="utf-8") as f:
+            f.write(wiki_link)
+
+    # Re-index the source file in SQLite so the global Knowledge Graph updates instantly!
+    content = source_file.read_text(encoding="utf-8")
+    conn = get_db()
+    conn.execute("UPDATE search_index SET content = ? WHERE path = ?", (content, source_path))
+    conn.commit()
+    conn.close()
