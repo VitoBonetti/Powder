@@ -596,6 +596,21 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
               ))
             )}
           </div>
+          {/* --- NEW: TROUBLESHOOTING ZONE --- */}
+          <div className="mt-6 border-t border-gray-800 pt-4">
+            <h4 className="text-xs uppercase text-red-500 font-bold mb-2">Danger Zone / Troubleshooting</h4>
+            <p className="text-[10px] text-gray-500 mb-3">If search results or tags ever fall out of sync (ghost tags), you can force a complete rebuild of the SQLite database.</p>
+            <button
+              onClick={() => {
+                fetch(getApiUrl('/reindex'), { method: 'POST', credentials: 'include' })
+                  .then(() => { fetchTree(); alert("Database successfully rebuilt!"); })
+                  .catch(err => alert("Failed to rebuild: " + err));
+              }}
+              className="w-full py-2 bg-red-900/10 text-red-400 border border-red-900 hover:bg-red-900/30 hover:text-red-300 rounded text-xs font-medium transition-colors"
+            >
+              Rebuild Search & Tag Database
+            </button>
+          </div>
         </div>
       </Modal>
 

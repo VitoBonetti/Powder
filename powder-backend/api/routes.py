@@ -6,6 +6,8 @@ from models.schemas import NoteData, MoveData, InboxItem, RenameNote
 from services import file_system
 from api.auth import verify_access
 import os
+from database import sync_search_index
+from config import VAULT_DIR
 
 
 load_dotenv()
@@ -168,5 +170,15 @@ def rename_file_or_folder(req: RenameNote, user: str = Depends(verify_access)):
     try:
         new_path = file_system.rename_item(req.old_path, req.new_name)
         return {"status": "success", "new_path": new_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reindex")
+def force_database_rebuild(user: str = Depends(verify_access)):
+    """Wipes the SQLite database and rebuilds it from the actual files."""
+    try:
+        sync_search_index(VAULT_DIR)
+        return {"status": "success", "message": "Database rebuilt perfectly."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
