@@ -9,7 +9,7 @@ import sqlite3
 from datetime import datetime
 import urllib.request
 from urllib.parse import urlparse, urljoin
-from parsers import route_and_parse
+from services.parsers import route_and_parse
 from database import get_db
 from filelock import FileLock, Timeout
 from fastapi import BackgroundTasks
