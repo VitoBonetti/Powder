@@ -183,3 +183,12 @@ def force_database_rebuild(user: str = Depends(verify_access)):
         return {"status": "success", "message": "Database rebuilt perfectly."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/graph")
+def get_knowledge_graph(user: str = Depends(verify_access)):
+    """Returns the nodes and links for the interactive knowledge graph."""
+    try:
+        return file_system.build_knowledge_graph()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

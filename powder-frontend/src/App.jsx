@@ -6,17 +6,17 @@ import Preview from './components/Preview';
 import TabBar from './components/TabBar';
 import TemplateModal from './components/TemplateModal';
 import SearchModal from './components/SearchModal';
+import GraphView from './components/GraphView';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
-import { Eye, Edit3, Columns, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
+import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const [content, setContent] = useState("");
-  // const [isPreview, setIsPreview] = useState(false);
-  const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'preview' | 'split'
+  const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'preview' | 'split' | 'graph'
   const [activeFile, setActiveFile] = useState(null);
   const [openTabs, setOpenTabs] = useState([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -173,7 +173,7 @@ function App() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">
+    <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden font-sans">
       <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -203,12 +203,28 @@ function App() {
             >
               <Eye className="w-4 h-4" />
             </button>
+            <div className="w-px bg-gray-700 mx-1"></div> {/* Visual Divider */}
+
+            <button
+              onClick={() => setViewMode('graph')}
+              title="Knowledge Graph"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'graph' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Network className="w-4 h-4" />
+            </button>
           </div>
         )}
 
         {/* The Content Layout Engine */}
         <div className="flex-1 overflow-hidden p-4">
-          {!activeFile ? (
+          {viewMode === 'graph' ? (
+            <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
+              <GraphView onNodeClick={(path) => {
+                openFileInTab(path);
+                setViewMode('edit'); // Automatically switch to edit mode when a node is clicked
+              }} />
+            </div>
+          ) : !activeFile ? (
             <div className="h-full flex items-center justify-center text-gray-500">Select a note from the sidebar to start writing.</div>
           ) : isImageFile ? (
             <div className="h-full overflow-y-auto flex flex-col items-center justify-center pb-20">

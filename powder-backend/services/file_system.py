@@ -514,3 +514,55 @@ def rename_item(old_path: str, new_name: str) -> str:
     conn.close()
 
     return new_path
+
+
+def build_knowledge_graph() -> dict:
+    """Builds a node/edge dictionary for the frontend force graph."""
+    conn = get_db()
+    nodes = []
+    links = []
+    node_ids = set()
+
+    try:
+        # Get all notes and their contents from the fast SQLite index
+        cursor = conn.execute("SELECT path, content FROM search_index")
+        rows = cursor.fetchall()
+
+        for row in rows:
+            path = row["path"]
+            name = path.split("/")[-1].replace(".md", "")
+
+            # Add Note Node
+            if path not in node_ids:
+                nodes.append({"id": path, "name": name, "group": "note"})
+                node_ids.add(path)
+
+            content = row["content"]
+
+            # Extract WikiLinks [[link]]
+            wiki_links = set(re.findall(r'\[\[(.*?)\]\]', content))
+            for wl in wiki_links:
+                target_path = resolve_wiki_link(wl)
+
+                # Add Ghost Node if it doesn't exist yet
+                if target_path not in node_ids:
+                    nodes.append({"id": target_path, "name": wl, "group": "ghost"})
+                    node_ids.add(target_path)
+
+                links.append({"source": path, "target": target_path})
+
+            # Extract Tags #tag
+            tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
+            for tag in tags:
+                tag_id = f"#{tag.lower()}"
+
+                # Add Tag Node
+                if tag_id not in node_ids:
+                    nodes.append({"id": tag_id, "name": tag_id, "group": "tag"})
+                    node_ids.add(tag_id)
+
+                links.append({"source": path, "target": tag_id})
+
+        return {"nodes": nodes, "links": links}
+    finally:
+        conn.close()
