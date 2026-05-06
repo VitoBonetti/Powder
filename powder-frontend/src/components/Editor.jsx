@@ -141,6 +141,8 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       };
     };
 
+    console.log("Autocomplete Dicts:", { tags: availableTags, files: availableFiles });
+
     return [
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       syntaxHighlighting(customMarkdownStyle),
