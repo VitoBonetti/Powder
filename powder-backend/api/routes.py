@@ -192,3 +192,20 @@ def get_knowledge_graph(user: str = Depends(verify_access)):
         return file_system.build_knowledge_graph()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import-scan")
+async def import_pentest_scan(file: UploadFile = File(...), user: str = Depends(verify_access)):
+    """Receives a raw scan file (XML/JSON), parses it, and creates a Vault Note."""
+    try:
+        content_bytes = await file.read()
+        raw_content = content_bytes.decode('utf-8')
+
+        saved_path = file_system.process_pentest_upload(raw_content)
+
+        return {"message": "Scan parsed and saved to Vault successfully", "path": saved_path}
+    except ValueError as ve:
+        # Handles the "No suitable parser found" error
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process scan: {str(e)}")

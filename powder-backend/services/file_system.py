@@ -9,6 +9,7 @@ import sqlite3
 from datetime import datetime
 import urllib.request
 from urllib.parse import urlparse, urljoin
+from parsers import route_and_parse
 from database import get_db
 from filelock import FileLock, Timeout
 from fastapi import BackgroundTasks
@@ -569,3 +570,43 @@ def build_knowledge_graph() -> dict:
         return {"nodes": nodes, "links": links}
     finally:
         conn.close()
+
+
+def process_pentest_upload(raw_content: str) -> str:
+    """Parses a tool output and saves it as a Canvas Node Markdown file."""
+    # 1. Parse the raw XML/JSON using PentestFlow logic
+    parsed_data = route_and_parse(raw_content)
+
+    title = parsed_data["title"]
+    safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+    filename = f"{safe_title}_{int(time.time())}.md"
+
+    # Let's save pentest nodes in a dedicated folder so they are organized
+    pentest_dir = VAULT_DIR / "Scans"
+    pentest_dir.mkdir(parents=True, exist_ok=True)
+    file_path = pentest_dir / filename
+    rel_path = f"Scans/{filename}"
+
+    # 2. Inject React Flow State into YAML Frontmatter
+    frontmatter = f"""---
+type: pentest_node
+node_type: scan_result
+x: 0
+y: 0
+command: "{parsed_data['command']}"
+---
+"""
+    # 3. Combine it all
+    full_content = frontmatter + f"\n# {title}\n\n" + parsed_data["markdown"]
+
+    # 4. Write to disk safely
+    with _get_lock(file_path):
+        file_path.write_text(full_content, encoding="utf-8")
+
+    # 5. Index it in SQLite so it appears in Powder's search!
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO search_index (path, content) VALUES (?, ?)", (rel_path, full_content))
+    conn.commit()
+    conn.close()
+
+    return rel_path
