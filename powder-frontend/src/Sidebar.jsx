@@ -159,10 +159,10 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
       <div
         draggable
         onDragStart={handleDragStart}
-        className="group flex items-center justify-between pl-4 py-1.5 hover:bg-gray-800 cursor-pointer text-gray-300 text-sm rounded-md transition-colors"
+        className="group flex items-center justify-between pl-4 py-1.5 hover:bg-gray-800 cursor-pointer text-gray-300 text-sm rounded-md transition-colors min-w-0"
         onClick={() => onFileSelect(node.path)}
       >
-        <div className="flex items-center truncate">
+        <div className="flex items-center truncate flex-1 min-w-0">
           {isImageFile ? (
             <ImageIcon className="w-4 h-4 mr-2 text-purple-400 flex-shrink-0" />
           ) : (
@@ -170,7 +170,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
           )}
           <span className="truncate">{node.name}</span>
         </div>
-        <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mr-2" />
+        <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0" />
       </div>
     );
   }
@@ -178,34 +178,33 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
   const creationBasePath = isRoot ? "" : `${node.path}/`;
 
   return (
-    <div>
-      <div
+    <div
         draggable={!isRoot && !isAssetsRoot}
         onDragStart={(!isRoot && !isAssetsRoot) ? handleDragStart : undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`group flex items-center justify-between py-1.5 hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors ${
+        className={`group flex items-center justify-between py-1.5 hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors min-w-0 ${
           isDragOver ? 'bg-blue-900/40 ring-1 ring-blue-500 text-blue-100' : 'text-gray-200'
         }`}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <div className="flex items-center truncate">
+        <div className="flex items-center truncate flex-1 min-w-0">
           {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
           <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${isAssetsRoot ? 'text-purple-500' : 'text-blue-400'}`} />
           <span className="truncate">{node.name}</span>
         </div>
 
-        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2 flex-shrink-0">
+        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0">
           {!isAssetFolder && (
             <>
-              <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
-              <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5 flex-shrink-0" /></button>
+              <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5 flex-shrink-0" /></button>
             </>
           )}
-          <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5" /></button>
+          <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5 flex-shrink-0" /></button>
           {!isRoot && !isAssetsRoot && (
-            <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5" title="Delete" />
+            <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5 flex-shrink-0" title="Delete" />
           )}
         </div>
       </div>

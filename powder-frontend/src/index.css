@@ -73,3 +73,28 @@ body {
 
 .markdown-alert-caution { border-color: #ef4444; }
 .markdown-alert-caution .markdown-alert-title { color: #ef4444; }
+
+/* --- BEAUTIFUL DARK SCROLLBARS --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 4px; /* Slightly thinner horizontal scrollbar for tabs */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #8b949e;
+}
+
+/* Firefox Support */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d transparent;
+}

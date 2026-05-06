@@ -112,9 +112,11 @@ function App() {
 
   const handleFileDelete = useCallback((deletedPath) => {
     setOpenTabs(prev => {
-      const newTabs = prev.filter(t => t !== deletedPath);
-      // If we are looking at the file that just got deleted, jump to the last open tab
-      if (activeFile === deletedPath) {
+      // Close the exact file, OR any file that starts with the deleted folder's path
+      const newTabs = prev.filter(t => t !== deletedPath && !t.startsWith(deletedPath + '/'));
+
+      // If the file we were currently looking at just got closed, switch to the last open tab
+      if (!newTabs.includes(activeFile)) {
         setActiveFile(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null);
       }
       return newTabs;
