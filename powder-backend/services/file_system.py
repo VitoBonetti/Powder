@@ -524,15 +524,18 @@ def build_knowledge_graph() -> dict:
     node_ids = set()
 
     try:
-        # Get all notes and their contents from the fast SQLite index
         cursor = conn.execute("SELECT path, content FROM search_index")
         rows = cursor.fetchall()
 
         for row in rows:
             path = row["path"]
+
+            # 1. NEW: Skip the _Templates folder entirely
+            if path.startswith("_Templates/") or "/_Templates/" in path:
+                continue
+
             name = path.split("/")[-1].replace(".md", "")
 
-            # Add Note Node
             if path not in node_ids:
                 nodes.append({"id": path, "name": name, "group": "note"})
                 node_ids.add(path)
@@ -542,9 +545,12 @@ def build_knowledge_graph() -> dict:
             # Extract WikiLinks [[link]]
             wiki_links = set(re.findall(r'\[\[(.*?)\]\]', content))
             for wl in wiki_links:
-                target_path = resolve_wiki_link(wl)
+                target_path = resolve_wiki_link(wl)  # Assumes you have this helper
 
-                # Add Ghost Node if it doesn't exist yet
+                # 2. NEW: Don't link to ghost templates either
+                if target_path and ("_Templates/" in target_path):
+                    continue
+
                 if target_path not in node_ids:
                     nodes.append({"id": target_path, "name": wl, "group": "ghost"})
                     node_ids.add(target_path)
@@ -555,12 +561,9 @@ def build_knowledge_graph() -> dict:
             tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
             for tag in tags:
                 tag_id = f"#{tag.lower()}"
-
-                # Add Tag Node
                 if tag_id not in node_ids:
                     nodes.append({"id": tag_id, "name": tag_id, "group": "tag"})
                     node_ids.add(tag_id)
-
                 links.append({"source": path, "target": tag_id})
 
         return {"nodes": nodes, "links": links}
