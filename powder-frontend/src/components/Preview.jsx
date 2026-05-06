@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { visit } from 'unist-util-visit';
-import { Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame } from 'lucide-react';
+import { Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame, Pencil } from 'lucide-react';
 import mermaid from 'mermaid';
 import { BACKEND_URL } from '../config';
 
@@ -68,7 +68,8 @@ export default function Preview({ content, onLinkClick, onTagClick }) {
               let Icon = Info;
               let colors = "border-blue-500 text-blue-400 bg-blue-900/10"; // Default (Info/Note)
 
-              if (['tip', 'hint'].includes(type)) { Icon = Lightbulb; colors = "border-emerald-500 text-emerald-400 bg-emerald-900/10"; }
+              if (['note'].includes(type)) { Icon = Pencil; colors = "border-indigo-500 text-indigo-400 bg-indigo-900/10"; }
+              else if (['tip', 'hint'].includes(type)) { Icon = Lightbulb; colors = "border-emerald-500 text-emerald-400 bg-emerald-900/10"; }
               else if (['important', 'abstract'].includes(type)) { Icon = AlertCircle; colors = "border-purple-500 text-purple-400 bg-purple-900/10"; }
               else if (['warning', 'caution', 'attention'].includes(type)) { Icon = AlertTriangle; colors = "border-amber-500 text-amber-400 bg-amber-900/10"; }
               else if (['danger', 'error', 'bug'].includes(type)) { Icon = Flame; colors = "border-red-500 text-red-400 bg-red-900/10"; }
