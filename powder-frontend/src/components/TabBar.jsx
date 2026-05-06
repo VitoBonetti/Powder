@@ -5,7 +5,7 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
 
   return (
     <div className="flex bg-[#010409] border-b border-gray-800 overflow-x-auto flex-shrink-0 custom-scrollbar select-none">
-      tabs.map(tab => (
+      {tabs.map(tab => (
         <div
           key={tab}
           onClick={() => onTabSelect(tab)}
