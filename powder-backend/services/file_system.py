@@ -641,19 +641,26 @@ def get_canvas_data() -> dict:
 
             # We ONLY put files on the Canvas that have 'type: pentest_node'
             if post.get('type') == 'pentest_node':
-                # Map to React Flow node format
-                nodes.append({
+                node_type = post.get('node_type', 'sticky_note')
+
+                react_flow_node = {
                     "id": rel_path,
-                    "type": post.get('node_type', 'sticky_note'),
+                    "type": node_type,
                     "position": {"x": int(post.get('x', 0)), "y": int(post.get('y', 0))},
                     "data": {
                         "note": post.content,
                         "color": post.get('color', '#fef08a'),
                         "title": rel_path.split("/")[-1].replace(".md", ""),
-                        "phase": post.get('phase', 'Enumeration'),  # <--- ADD THIS LINE
+                        "phase": post.get('phase', 'Enumeration'),
                         "command": post.get('command', '')
                     }
-                })
+                }
+
+                # NEW: Force Sticky Notes to the absolute background!
+                if node_type == 'sticky_note':
+                    react_flow_node["zIndex"] = -1
+
+                nodes.append(react_flow_node)
 
                 # 3. Extract WikiLinks and convert them to React Flow Edges!
                 wiki_links = set(re.findall(r'\[\[(.*?)\]\]', post.content))

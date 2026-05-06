@@ -75,6 +75,35 @@ export default function CanvasView() {
     });
   };
 
+  // Spawns a new Markdown file directly onto the canvas!
+  const handleSpawnNode = (nodeType, defaultTitle) => {
+    // Generate a unique filename
+    const fileName = `${defaultTitle.replace(/\s+/g, '_')}_${Date.now()}.md`;
+    const relPath = `Scans/${fileName}`;
+
+    // Create the YAML frontmatter based on what button was clicked
+    let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\nx: 100\ny: 100\n`;
+
+    if (nodeType === 'starting_node') frontmatter += `scope: "Internal Network"\n`;
+    if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
+    if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
+
+    frontmatter += `---\n# ${defaultTitle}\n`;
+
+    // Save it directly to the vault using the exact same logic the Editor uses
+    fetch(getApiUrl(`/notes/${relPath}`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: frontmatter })
+    }).then(() => {
+      // Refresh the canvas to pull the newly created file!
+      fetch(getApiUrl('/canvas/data'), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => { setNodes(data.nodes); setEdges(data.edges); });
+    });
+  };
+
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
       <div className="flex-1 h-full">
@@ -92,6 +121,26 @@ export default function CanvasView() {
         >
           <Background color="#30363d" gap={16} />
           <Controls className="bg-gray-800 border-gray-700 fill-white" />
+          <div className="absolute top-4 left-4 z-50 flex gap-2">
+            <button
+              onClick={() => handleSpawnNode('starting_node', 'New Target Scope')}
+              className="bg-[#0ea5e9] text-white px-3 py-2 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-2 text-sm font-bold"
+            >
+              + Target Scope
+            </button>
+            <button
+              onClick={() => handleSpawnNode('action', 'New Action')}
+              className="bg-[#161b22] border border-gray-700 text-gray-300 px-3 py-2 rounded-lg shadow-lg hover:text-white transition flex items-center gap-2 text-sm font-bold"
+            >
+              + Action Node
+            </button>
+            <button
+              onClick={() => handleSpawnNode('sticky_note', 'New Note')}
+              className="bg-[#fef08a] text-yellow-900 px-3 py-2 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-2 text-sm font-bold"
+            >
+              + Sticky Note
+            </button>
+          </div>
         </ReactFlow>
       </div>
 
