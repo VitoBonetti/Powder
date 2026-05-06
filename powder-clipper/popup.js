@@ -55,6 +55,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clipperScreen = document.getElementById('clipper-screen');
   const statusDiv = document.getElementById('status');
 
+  // --- SETTINGS TOGGLE LOGIC ---
+  document.getElementById('settings-toggle').addEventListener('click', () => {
+    const configPanel = document.getElementById('config-panel');
+    if (configPanel.classList.contains('hidden')) {
+      configPanel.classList.remove('hidden');
+    } else {
+      configPanel.classList.add('hidden');
+    }
+  });
+
   // 1. FAIL-SAFE INITIALIZATION
   try {
     if (!chrome.storage) {
@@ -141,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // --- CLIPPING LOGIC ---
+  // --- NEW ROBUST CLIPPING LOGIC ---
   async function populateClipperData() {
     try {
       let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -156,51 +166,56 @@ document.addEventListener('DOMContentLoaded', async () => {
           const sel = window.getSelection();
           if (!sel.rangeCount || sel.toString().trim() === "") return "";
 
+          // Clone the highlighted DOM
           const container = document.createElement("div");
           container.appendChild(sel.getRangeAt(0).cloneContents());
 
-          // --- THE DOM FIX: Clean URLs before Regex ---
-          container.querySelectorAll('img').forEach(img => {
-            // currentSrc gets the actual image the browser is displaying (bypasses srcset/lazy loading)
-            let realSrc = img.currentSrc || img.src || img.getAttribute('data-src');
-
-            // Force absolute URL safely
-            const a = document.createElement('a');
-            a.href = realSrc;
-            img.setAttribute('src', a.href);
-
-            // NUKE responsive tags so they don't break the Markdown Regex
-            img.removeAttribute('srcset');
-            img.removeAttribute('sizes');
-            img.removeAttribute('data-src');
-            img.removeAttribute('loading');
+          // 1. Process Inline Elements (Inner-most first)
+          container.querySelectorAll('b, strong').forEach(el => {
+            el.replaceWith(document.createTextNode(`**${el.textContent}**`));
+          });
+          container.querySelectorAll('i, em').forEach(el => {
+            el.replaceWith(document.createTextNode(`*${el.textContent}*`));
           });
 
+          // 2. Process Smart Links
           container.querySelectorAll('a').forEach(a => {
             const href = a.getAttribute('href');
             if (href && (href.startsWith('/') || href.startsWith('#'))) {
-              const textNode = document.createTextNode(a.textContent);
-              a.replaceWith(textNode);
-            } else {
-              a.setAttribute('href', a.href);
+              // Strip internal relative links but keep the formatted text
+              a.replaceWith(document.createTextNode(a.textContent));
+            } else if (href) {
+              // Keep external valid links
+              a.replaceWith(document.createTextNode(`[${a.textContent}](${a.href})`));
             }
           });
-          // --- END DOM FIX ---
 
-          let md = container.innerHTML
-            .replace(/<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi, '\n![$2]($1)\n')
-            .replace(/<img[^>]*src="([^"]+)"[^>]*>/gi, '\n![]($1)\n')
-            .replace(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-            .replace(/<(b|strong)[^>]*>(.*?)<\/\1>/gi, '**$2**')
-            .replace(/<(i|em)[^>]*>(.*?)<\/\1>/gi, '*$2*')
-            .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (m, lvl, txt) => '\n\n' + '#'.repeat(lvl) + ' ' + txt + '\n\n')
-            .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n')
-            .replace(/<br[^>]*>/gi, '\n')
-            .replace(/<[^>]+>/g, '');
+          // 3. Process Images
+          container.querySelectorAll('img').forEach(img => {
+            let realSrc = img.currentSrc || img.src || img.getAttribute('data-src');
+            const a = document.createElement('a'); a.href = realSrc; // Force absolute URL
+            const alt = img.alt || '';
+            img.replaceWith(document.createTextNode(`\n![${alt}](${a.href})\n`));
+          });
 
-          const decoder = document.createElement('textarea');
-          decoder.innerHTML = md;
-          return decoder.value.trim().replace(/\n{3,}/g, '\n\n');
+          // 4. Process Blocks (Headings, Paragraphs, Linebreaks)
+          ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].forEach((tag, index) => {
+            container.querySelectorAll(tag).forEach(el => {
+              el.replaceWith(document.createTextNode(`\n\n${'#'.repeat(index + 1)} ${el.textContent}\n\n`));
+            });
+          });
+
+          container.querySelectorAll('p').forEach(el => {
+            el.replaceWith(document.createTextNode(`\n\n${el.textContent}\n\n`));
+          });
+
+          container.querySelectorAll('br').forEach(el => {
+            el.replaceWith(document.createTextNode(`\n`));
+          });
+
+          // 5. Extract Text (Browser natively strips any remaining unhandled HTML)
+          let md = container.textContent;
+          return md.trim().replace(/\n{3,}/g, '\n\n');
         }
       }, async (results) => {
         let capturedText = results && results[0] ? results[0].result : "";

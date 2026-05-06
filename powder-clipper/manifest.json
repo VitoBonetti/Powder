@@ -8,6 +8,16 @@
     "https://*/*"
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "public/logo16.png",
+      "48": "public/logo48.png",
+      "128": "public/logo128.png"
+    }
+  },
+  "icons": {
+    "16": "public/logo16.png",
+    "48": "public/logo48.png",
+    "128": "public/logo128.png"
   }
 }
