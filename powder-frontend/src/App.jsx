@@ -7,6 +7,7 @@ import TabBar from './components/TabBar';
 import TemplateModal from './components/TemplateModal';
 import SearchModal from './components/SearchModal';
 import GraphView from './components/GraphView';
+import CanvasView from './components/canvas/CanvasView';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
 import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
@@ -246,6 +247,10 @@ function App() {
             <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
               <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             </div>
+          ) : viewMode === 'canvas' ? (
+           <div className="h-full w-full p-2">
+              <CanvasView />
+           </div>
           ) : (
             /* 3. EXPAND EDIT WIDTH */
             <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
