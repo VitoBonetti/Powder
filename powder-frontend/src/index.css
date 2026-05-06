@@ -98,3 +98,7 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #30363d transparent;
 }
+
+.cm-tooltip-autocomplete {
+  z-index: 9999 !important;
+}
