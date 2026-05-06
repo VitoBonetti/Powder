@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, FileText, Hash, Terminal, Settings, Plus, LogOut } from 'lucide-react';
 import { getApiUrl } from '../config';
 
-// 1. Define available global commands
 const COMMAND_REGISTRY = [
   { id: 'cmd-new-note', label: 'Create New Note', icon: Plus },
   { id: 'cmd-settings', label: 'Open Settings', icon: Settings },
@@ -13,16 +12,23 @@ const COMMAND_REGISTRY = [
 export default function SearchModal({ isOpen, onClose, onSelect, onCommand, initialQuery = "" }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState([]);
-  const [mode, setMode] = useState("search"); // 'search', 'tag', 'command'
+  const [mode, setMode] = useState("search"); // 'search', 'tag_suggestion', 'tag_search', 'command'
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [vaultTags, setVaultTags] = useState([]); // NEW: Local tag dictionary
   const searchInputRef = useRef(null);
 
-  // Reset state on open/close
+  // Reset state and fetch tags on open
   useEffect(() => {
     if (isOpen) {
       setSearchQuery(initialQuery);
       setSelectedIndex(0);
       if (searchInputRef.current) searchInputRef.current.focus();
+
+      // Fetch tags to populate the autocomplete dictionary
+      fetch(getApiUrl('/tags'), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => setVaultTags(data))
+        .catch(err => console.error("Failed to load tags:", err));
     } else {
       setSearchQuery("");
       setResults([]);
@@ -31,8 +37,8 @@ export default function SearchModal({ isOpen, onClose, onSelect, onCommand, init
 
   // Handle Mode Routing & Data Fetching
   useEffect(() => {
-    setSelectedIndex(0); // Reset selection when query changes
-    const query = searchQuery.trim();
+    setSelectedIndex(0);
+    const query = searchQuery.trimStart(); // Allow trailing space to trigger actual search
 
     if (!query) {
       setResults([]);
@@ -40,32 +46,55 @@ export default function SearchModal({ isOpen, onClose, onSelect, onCommand, init
       return;
     }
 
+    // --- COMMAND MODE ---
     if (query.startsWith('>')) {
       setMode("command");
       const cmdQuery = query.slice(1).trim().toLowerCase();
       const filtered = COMMAND_REGISTRY.filter(cmd =>
         cmd.label.toLowerCase().includes(cmdQuery)
       );
-      setResults(filtered);
+      setResults(filtered.map(cmd => ({ type: 'command', ...cmd })));
       return;
     }
 
-    // Debounced Backend Search
-    const delayDebounceFn = setTimeout(() => {
-      const isTag = query.startsWith('#');
-      setMode(isTag ? "tag" : "search");
-      const endpoint = isTag
-        ? `/search/tag?tag=${encodeURIComponent(query.slice(1))}`
-        : `/search?q=${encodeURIComponent(query)}`;
+    // --- TAG MODE ---
+    if (query.startsWith('#')) {
+      const rawTag = query.slice(1);
 
-      fetch(getApiUrl(endpoint), { credentials: 'include' })
+      // Phase 1: If they haven't typed a space yet, show autocomplete suggestions
+      if (!searchQuery.endsWith(' ')) {
+        setMode('tag_suggestion');
+        const term = rawTag.toLowerCase();
+        const matches = vaultTags.filter(t => t.tag.toLowerCase().includes(term));
+        setResults(matches.map(t => ({ type: 'tag_suggestion', label: t.tag, count: t.count })));
+        return;
+      }
+
+      // Phase 2: They added a space (e.g. "#security "). Execute the backend file search!
+      setMode('tag_search');
+      const exactTag = rawTag.trim();
+
+      const delayDebounceFn = setTimeout(() => {
+        fetch(getApiUrl(`/search/tag?tag=${encodeURIComponent(exactTag)}`), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => setResults(data.map(d => ({ type: 'file', ...d }))))
+        .catch(err => console.error("Search failed:", err));
+      }, 300);
+
+      return () => clearTimeout(delayDebounceFn);
+    }
+
+    // --- NORMAL SEARCH MODE ---
+    setMode("search");
+    const delayDebounceFn = setTimeout(() => {
+      fetch(getApiUrl(`/search?q=${encodeURIComponent(query)}`), { credentials: 'include' })
       .then(res => res.json())
-      .then(data => setResults(data))
+      .then(data => setResults(data.map(d => ({ type: 'file', ...d }))))
       .catch(err => console.error("Search failed:", err));
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
+  }, [searchQuery, vaultTags]);
 
   // Handle Keyboard Navigation
   const handleKeyDown = (e) => {
@@ -86,10 +115,15 @@ export default function SearchModal({ isOpen, onClose, onSelect, onCommand, init
   const executeSelection = (item) => {
     if (mode === 'command') {
       onCommand(item.id);
+      onClose();
+    } else if (mode === 'tag_suggestion') {
+      // AUTOCOMPLETE: Append a space to trigger the file search
+      setSearchQuery(`#${item.label} `);
+      // We do NOT close the modal here, so the user can see the files appear!
     } else {
       onSelect(item.path);
+      onClose();
     }
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -122,32 +156,35 @@ export default function SearchModal({ isOpen, onClose, onSelect, onCommand, init
           {results.map((result, idx) => {
             const isSelected = idx === selectedIndex;
 
-            // COMMAND RENDERING
-            if (mode === 'command') {
+            // RENDERING: COMMANDS
+            if (result.type === 'command') {
               const Icon = result.icon;
               return (
-                <div
-                  key={result.id}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  onClick={() => executeSelection(result)}
-                  className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-900/40 border-l-2 border-blue-500' : 'border-l-2 border-transparent hover:bg-gray-800/50'}`}
-                >
+                <div key={result.id} onMouseEnter={() => setSelectedIndex(idx)} onClick={() => executeSelection(result)} className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-900/40 border-l-2 border-blue-500' : 'border-l-2 border-transparent hover:bg-gray-800/50'}`}>
                   <Icon className={`w-4 h-4 mr-3 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`} />
                   <span className={`text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>{result.label}</span>
                 </div>
               );
             }
 
-            // SEARCH / TAG RENDERING
+            // RENDERING: TAG SUGGESTIONS
+            if (result.type === 'tag_suggestion') {
+              return (
+                <div key={idx} onMouseEnter={() => setSelectedIndex(idx)} onClick={() => executeSelection(result)} className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-900/40 border-l-2 border-blue-500' : 'border-l-2 border-transparent hover:bg-gray-800/50'}`}>
+                  <div className={`flex items-center text-sm font-medium ${isSelected ? 'text-blue-300' : 'text-blue-400'}`}>
+                    <Hash className="w-4 h-4 mr-2" />
+                    {result.label}
+                  </div>
+                  <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{result.count} files</span>
+                </div>
+              );
+            }
+
+            // RENDERING: FILES (From Normal Search or Tag Search)
             return (
-              <div
-                key={idx}
-                onMouseEnter={() => setSelectedIndex(idx)}
-                onClick={() => executeSelection(result)}
-                className={`group flex flex-col px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-900/40 border-l-2 border-blue-500' : 'border-l-2 border-transparent border-b border-gray-800/50 hover:bg-gray-800/50'}`}
-              >
+              <div key={idx} onMouseEnter={() => setSelectedIndex(idx)} onClick={() => executeSelection(result)} className={`group flex flex-col px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-900/40 border-l-2 border-blue-500' : 'border-l-2 border-transparent border-b border-gray-800/50 hover:bg-gray-800/50'}`}>
                 <div className={`flex items-center text-sm font-medium mb-1 ${isSelected ? 'text-blue-300' : 'text-blue-400'}`}>
-                  {mode === 'tag' ? <Hash className="w-4 h-4 mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
+                  <FileText className="w-4 h-4 mr-2" />
                   {result.path}
                 </div>
                 <div className={`text-xs pl-6 line-clamp-1 italic ${isSelected ? 'text-gray-300' : 'text-gray-400'}`}>

@@ -181,7 +181,7 @@ function App() {
 
         {/* Floating View Mode Toolbar */}
         {activeFile && !isImageFile && (
-          <div className="absolute top-4 right-8 z-10 flex bg-[#161b22] border border-gray-700 rounded-lg p-1 shadow-lg opacity-80 hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-8 right-8 z-20 flex bg-[#161b22] border border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-opacity">
             <button
               onClick={() => setViewMode('edit')}
               title="Edit Mode"
@@ -217,7 +217,6 @@ function App() {
               </div>
             </div>
           ) : viewMode === 'split' ? (
-            /* SPLIT MODE LAYOUT */
             <div className="flex h-full gap-6">
               <div className="flex-1 overflow-y-auto border-r border-gray-800 pr-4 hide-scroll">
                 <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
@@ -227,13 +226,13 @@ function App() {
               </div>
             </div>
           ) : viewMode === 'preview' ? (
-            /* FULL PREVIEW LAYOUT */
-            <div className="h-full overflow-y-auto max-w-4xl mx-auto px-8 py-6">
+            /* 2. EXPAND PREVIEW WIDTH */
+            <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
               <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
             </div>
           ) : (
-            /* FULL EDIT LAYOUT */
-            <div className="h-full overflow-y-auto max-w-4xl mx-auto px-8 py-6">
+            /* 3. EXPAND EDIT WIDTH */
+            <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
               <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
             </div>
           )}
