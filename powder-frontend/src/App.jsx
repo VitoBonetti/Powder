@@ -110,6 +110,17 @@ function App() {
       .catch(err => console.error("Link resolution failed:", err));
   }, [openTabs]);
 
+  const handleFileDelete = useCallback((deletedPath) => {
+    setOpenTabs(prev => {
+      const newTabs = prev.filter(t => t !== deletedPath);
+      // If we are looking at the file that just got deleted, jump to the last open tab
+      if (activeFile === deletedPath) {
+        setActiveFile(newTabs.length > 0 ? newTabs[newTabs.length - 1] : null);
+      }
+      return newTabs;
+    });
+  }, [activeFile]);
+
   const openFileInTab = (path) => {
     if (!openTabs.includes(path)) setOpenTabs(prev => [...prev, path]);
     setActiveFile(path);
@@ -127,7 +138,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">
-      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} />
+      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />

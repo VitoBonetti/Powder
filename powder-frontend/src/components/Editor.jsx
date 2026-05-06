@@ -84,6 +84,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       wikiLinkPlugin,
       tagPlugin,
       templateShortcut,
+      EditorView.lineWrapping,
       EditorView.domEventHandlers({
         click(event) {
           // Check for WikiLinks

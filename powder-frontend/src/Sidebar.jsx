@@ -196,7 +196,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
           <span className="truncate">{node.name}</span>
         </div>
 
-        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mr-2 flex-shrink-0">
           {!isAssetFolder && (
             <>
               <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5" /></button>
@@ -222,7 +222,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete }) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
@@ -341,7 +341,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: initialContent })
-    }).then(() => { fetchTree(); closeModal(); });
+    }).then(() => { fetchTree(); onFileSelect(fullPath); closeModal(); });
   };
 
   const handleCreateFolderAction = () => {
@@ -354,7 +354,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick }) {
   const handleDeleteAction = () => {
     const pathToDelete = modalTarget.path || modalTarget.name;
     fetch(getApiUrl(`/notes/${pathToDelete}`), { method: 'DELETE', credentials: 'include' })
-      .then(() => { fetchTree(); closeModal(); })
+      .then(() => { fetchTree(); onFileDelete(pathToDelete); closeModal(); })
       .catch(err => console.error("Failed to delete:", err));
   };
 
