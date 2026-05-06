@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { visit } from 'unist-util-visit';
-import { Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame, Pencil, Bug, Bandage } from 'lucide-react';
+import { Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame, Pencil, Bug, Bandage, Braces, NotepadText, Speech, ChevronsLeftRightEllipsis, NotebookText, BookOpenCheck, BookmarkCheck } from 'lucide-react';
 import mermaid from 'mermaid';
 import { BACKEND_URL } from '../config';
 
@@ -76,6 +76,16 @@ export default function Preview({ content, onLinkClick, onTagClick }) {
               else if (['warning', 'caution', 'attention'].includes(type)) { Icon = AlertTriangle; colors = "border-amber-500 text-amber-400 bg-amber-900/10"; }
               else if (['danger', 'error', 'bug'].includes(type)) { Icon = Flame; colors = "border-orange-500 text-orange-300 bg-orange-500/10"; }
               else if (['success', 'check', 'done'].includes(type)) { Icon = CheckCircle; colors = "border-green-500 text-green-400 bg-green-900/10"; }
+
+              // --- Alert for template ---
+              else if (['metadata'].includes(type)) { Icon = Braces; colors = "border-fuchsia-500 text-fuchsia-400 bg-fuchsia-900/10"; }
+              else if (['description'].includes(type)) { Icon = NotepadText; colors = "border-slate-500 text-slate-400 bg-slate-900/10"; }
+              else if (['usage'].includes(type)) { Icon = Speech; colors = "border-lime-500 text-lime-400 bg-lime-900/10"; }
+              else if (['code'].includes(type)) { Icon = ChevronsLeftRightEllipsis; colors = "border-gray-500 text-gray-400 bg-gray-900/10"; }
+              else if (['examples'].includes(type)) { Icon = BookOpenCheck; colors = "border-mauve-500 text-mauve-400 bg-mauve-900/10"; }
+              else if (['observations'].includes(type)) { Icon = NotebookText; colors = "border-zinc-500 text-zinc-400 bg-zinc-900/10"; }
+              else if (['references'].includes(type)) { Icon = BookmarkCheck; colors = "border-mist-500 text-mist-400 bg-mist-900/10"; }
+
 
               return (
                 <div className={`my-6 border-l-4 rounded-r-lg px-4 py-3 ${colors}`}>
