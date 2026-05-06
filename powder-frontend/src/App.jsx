@@ -8,14 +8,15 @@ import TemplateModal from './components/TemplateModal';
 import SearchModal from './components/SearchModal';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
-import { Eye, Edit3, CheckCircle2, Loader2, Search } from 'lucide-react';
+import { Eye, Edit3, Columns, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const [content, setContent] = useState("");
-  const [isPreview, setIsPreview] = useState(false);
+  // const [isPreview, setIsPreview] = useState(false);
+  const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'preview' | 'split'
   const [activeFile, setActiveFile] = useState(null);
   const [openTabs, setOpenTabs] = useState([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -178,42 +179,66 @@ function App() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
 
-        <div className="h-14 border-b border-gray-800 flex items-center justify-between px-6 bg-[#0d1117] z-10 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-300">{activeFile || "No file selected"}</span>
-            {saveStatus === "saving" && <span className="flex items-center text-xs text-blue-400"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Saving...</span>}
-            {saveStatus === "saved" && <span className="flex items-center text-xs text-green-500"><CheckCircle2 className="w-3 h-3 mr-1" /> Saved</span>}
-            {saveStatus === "error" && <span className="flex items-center text-xs text-red-500 font-bold"><AlertCircle className="w-3 h-3 mr-1" /> Save Failed!</span>}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSearchOpen(true)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-white bg-[#161b22] border border-gray-700 hover:border-gray-500 rounded-md transition-colors">
-              <Search className="w-3.5 h-3.5" /> <span>Search...</span><kbd className="hidden sm:inline-block bg-gray-800 border border-gray-700 px-1.5 rounded text-[10px] ml-2">Ctrl K</kbd>
+        {/* Floating View Mode Toolbar */}
+        {activeFile && !isImageFile && (
+          <div className="absolute top-4 right-8 z-10 flex bg-[#161b22] border border-gray-700 rounded-lg p-1 shadow-lg opacity-80 hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => setViewMode('edit')}
+              title="Edit Mode"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Edit3 className="w-4 h-4" />
             </button>
-            <button onClick={() => setIsPreview(!isPreview)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors">
-              {isPreview ? <><Edit3 className="w-4 h-4" /> Edit Mode</> : <><Eye className="w-4 h-4" /> Reading Mode</>}
+            <button
+              onClick={() => setViewMode('split')}
+              title="Split Mode"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'split' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Columns className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('preview')}
+              title="Preview Mode"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'preview' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Eye className="w-4 h-4" />
             </button>
           </div>
-        </div>
+        )}
 
-        <div className="flex-1 overflow-y-auto px-8 py-10">
-          <div className="w-full max-w-6xl mx-auto h-full">
-            {!activeFile ? (
-              <div className="h-full flex items-center justify-center text-gray-500">Select a note from the sidebar to start writing.</div>
-            ) : isImageFile ? (
-              <div className="h-full flex flex-col items-center justify-center pb-20">
-                <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
-                  <img src={`${BACKEND_URL}/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
-                </div>
-                <p className="mt-4 text-gray-500 text-sm font-mono">{activeFile}</p>
+        {/* The Content Layout Engine */}
+        <div className="flex-1 overflow-hidden p-4">
+          {!activeFile ? (
+            <div className="h-full flex items-center justify-center text-gray-500">Select a note from the sidebar to start writing.</div>
+          ) : isImageFile ? (
+            <div className="h-full overflow-y-auto flex flex-col items-center justify-center pb-20">
+              <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
+                <img src={`${BACKEND_URL}/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
               </div>
-            ) : isPreview ? (
+            </div>
+          ) : viewMode === 'split' ? (
+            /* SPLIT MODE LAYOUT */
+            <div className="flex h-full gap-6">
+              <div className="flex-1 overflow-y-auto border-r border-gray-800 pr-4 hide-scroll">
+                <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+              </div>
+              <div className="flex-1 overflow-y-auto pl-2 hide-scroll">
+                <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+              </div>
+            </div>
+          ) : viewMode === 'preview' ? (
+            /* FULL PREVIEW LAYOUT */
+            <div className="h-full overflow-y-auto max-w-4xl mx-auto px-8 py-6">
               <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
-            ) : (
+            </div>
+          ) : (
+            /* FULL EDIT LAYOUT */
+            <div className="h-full overflow-y-auto max-w-4xl mx-auto px-8 py-6">
               <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
       </main>
 
       <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} onCommand={handleGlobalCommand} initialQuery={searchInitialQuery} />
