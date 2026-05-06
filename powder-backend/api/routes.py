@@ -4,10 +4,10 @@ from typing import List
 from dotenv import load_dotenv
 from models.schemas import NoteData, MoveData, InboxItem, RenameNote
 from services import file_system
+from services.file_system import VAULT_DIR
 from api.auth import verify_access
 import os
 from database import sync_search_index
-from config import VAULT_DIR
 
 
 load_dotenv()
