@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -6,7 +6,7 @@ import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { EditorView, Decoration, ViewPlugin, MatchDecorator, keymap } from '@codemirror/view';
-import { autocompletion } from '@codemirror/autocomplete'; // <-- NEW IMPORT
+import { autocompletion } from '@codemirror/autocomplete';
 import { BACKEND_URL, getApiUrl } from '../config';
 
 const customMarkdownStyle = HighlightStyle.define([
@@ -20,34 +20,7 @@ const customMarkdownStyle = HighlightStyle.define([
 ]);
 
 export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate }) {
-  // State for Autocomplete dictionaries
-  const [availableTags, setAvailableTags] = useState([]);
-  const [availableFiles, setAvailableFiles] = useState([]);
 
-  // Fetch dictionaries on mount
-  useEffect(() => {
-    // Fetch Tags
-    fetch(getApiUrl('/tags'), { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => setAvailableTags(data.map(tagObj => tagObj.tag)))
-      .catch(err => console.error("Failed to load tags for autocomplete", err));
-
-    // Fetch Files (flatten the tree)
-    fetch(getApiUrl('/tree'), { credentials: 'include' })
-      .then(res => res.json())
-      .then(tree => {
-        const files = [];
-        const extractFiles = (node) => {
-          if (node.type === 'file' && node.name.endsWith('.md')) {
-            files.push(node.name.replace('.md', ''));
-          }
-          if (node.children) node.children.forEach(extractFiles);
-        };
-        extractFiles(tree);
-        setAvailableFiles(files);
-      })
-      .catch(err => console.error("Failed to load files for autocomplete", err));
-  }, []);
 
   // Image Upload Logic
   const uploadImage = (file, view, pos) => {
@@ -108,40 +81,61 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     ]);
 
     // Tag Completion Source
-    const tagCompletionSource = (context) => {
+    const tagCompletionSource = async (context) => {
       const word = context.matchBefore(/#[\w-]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
 
-      return {
-        from: word.from + 1, // Start replacing AFTER the '#'
-        options: availableTags.map(tag => ({
-          label: tag,
-          type: "keyword",
-          apply: tag + " " // Adds a space after selection
-        })),
-        validFor: /^[\w-]*$/
-      };
+      try {
+        const res = await fetch(getApiUrl('/tags'), { credentials: 'include' });
+        const data = await res.json();
+
+        return {
+          from: word.from + 1, // Start replacing AFTER the '#'
+          options: data.map(t => ({
+            label: t.tag,
+            type: "keyword",
+            apply: t.tag + " "
+          })),
+          validFor: /^[\w-]*$/
+        };
+      } catch (err) {
+        return null;
+      }
     };
 
     // WikiLink Completion Source
-    const wikiLinkCompletionSource = (context) => {
+    const wikiLinkCompletionSource = async (context) => {
       const word = context.matchBefore(/\[\[[^\]]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
 
-      return {
-        from: word.from + 2, // Start replacing AFTER the '[['
-        options: availableFiles.map(file => ({
-          label: file,
-          type: "text",
-          apply: file + "]] " // Auto-closes the bracket and adds a space
-        })),
-        validFor: /^[^\]]*$/
-      };
-    };
+      try {
+        const res = await fetch(getApiUrl('/tree'), { credentials: 'include' });
+        const tree = await res.json();
 
-    console.log("Autocomplete Dicts:", { tags: availableTags, files: availableFiles });
+        const files = [];
+        const extractFiles = (node) => {
+          if (node.type === 'file' && node.name.endsWith('.md')) {
+            files.push(node.name.replace('.md', ''));
+          }
+          if (node.children) node.children.forEach(extractFiles);
+        };
+        extractFiles(tree);
+
+        return {
+          from: word.from + 2, // Start replacing AFTER the '[['
+          options: files.map(file => ({
+            label: file,
+            type: "text",
+            apply: file + "]] "
+          })),
+          validFor: /^[^\]]*$/
+        };
+      } catch (err) {
+        return null;
+      }
+    };
 
     return [
       markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -197,7 +191,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         }
       })
     ];
-  }, [onLinkClick]);
+  }, [onLinkClick, onTagClick, onOpenTemplate]);
 
   return (
     <CodeMirror
