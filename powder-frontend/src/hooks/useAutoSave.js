@@ -6,7 +6,8 @@ export function useAutoSave(content, activeFile, isImageFile) {
   const [lastSaved, setLastSaved] = useState(0);
 
   useEffect(() => {
-    if (!activeFile || isImageFile || saveStatus === "idle") return;
+    // if (!activeFile || isImageFile || saveStatus === "idle") return;
+    if (!activeFile || isImageFile) return;
 
     setSaveStatus("saving");
 
@@ -18,13 +19,13 @@ export function useAutoSave(content, activeFile, isImageFile) {
         body: JSON.stringify({ content: content || "" })
       })
       .then(res => {
-        if (!res.ok) throw new Error("Backend rejected save");
+        if (!res.ok) throw new Error("Save failed");
         setSaveStatus("saved");
         setLastSaved(Date.now());
       })
       .catch(err => {
-        console.error("Error saving note:", err);
-        setSaveStatus("saved"); // Reset to prevent infinite loops, handle better in prod
+        console.error("Auto-save error:", err);
+        setSaveStatus("error"); // New explicit error state
       });
     }, 1000);
 
@@ -33,3 +34,29 @@ export function useAutoSave(content, activeFile, isImageFile) {
 
   return { saveStatus, setSaveStatus, lastSaved };
 }
+
+//     setSaveStatus("saving");
+//
+//     const delayDebounceFn = setTimeout(() => {
+//       fetch(getApiUrl(`/notes/${activeFile}`), {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         credentials: 'include',
+//         body: JSON.stringify({ content: content || "" })
+//       })
+//       .then(res => {
+//         if (!res.ok) throw new Error("Backend rejected save");
+//         setSaveStatus("saved");
+//         setLastSaved(Date.now());
+//       })
+//       .catch(err => {
+//         console.error("Error saving note:", err);
+//         setSaveStatus("saved"); // Reset to prevent infinite loops, handle better in prod
+//       });
+//     }, 1000);
+//
+//     return () => clearTimeout(delayDebounceFn);
+//   }, [content, activeFile, isImageFile]);
+//
+//   return { saveStatus, setSaveStatus, lastSaved };
+// }

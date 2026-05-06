@@ -157,6 +157,7 @@ function App() {
             <span className="text-sm font-medium text-gray-300">{activeFile || "No file selected"}</span>
             {saveStatus === "saving" && <span className="flex items-center text-xs text-blue-400"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Saving...</span>}
             {saveStatus === "saved" && <span className="flex items-center text-xs text-green-500"><CheckCircle2 className="w-3 h-3 mr-1" /> Saved</span>}
+            {saveStatus === "error" && <span className="flex items-center text-xs text-red-500 font-bold"><AlertCircle className="w-3 h-3 mr-1" /> Save Failed!</span>}
           </div>
 
           <div className="flex items-center gap-4">

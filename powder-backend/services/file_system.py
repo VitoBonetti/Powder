@@ -11,6 +11,7 @@ import urllib.request
 from urllib.parse import urlparse, urljoin
 from database import get_db
 from filelock import FileLock, Timeout
+from fastapi import BackgroundTasks
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -447,52 +448,38 @@ def harvest_external_images(content: str, source_url: str) -> str:
     return content
 
 
-def save_to_inbox(title: str, content: str, source: str = "") -> str:
-    """Ingests external text and saves it safely into the _Inbox folder."""
+def save_to_inbox_async(title: str, content: str, source: str, background_tasks: BackgroundTasks) -> str:
     inbox_dir = VAULT_DIR / "_Inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
 
     safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
-    if not safe_title:
-        safe_title = f"clip_{int(time.time())}"
-
-    filename = f"{safe_title}.md"
+    filename = f"{safe_title}_{int(time.time())}.md"
     file_path = inbox_dir / filename
-
-    # Prevent overwriting if clipped multiple times rapidly
-    if file_path.exists():
-        filename = f"{safe_title}_{int(time.time())}.md"
-        file_path = inbox_dir / filename
-
-    content = harvest_external_images(content, source)
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    header = f"---\nclipped: {timestamp}\nsource: {source}\n---\n\n"
-    full_content = header + f"# {title}\n\n" + content
-
-    try:
-        # ATOMIC WRITE: Lock the inbox file
-        with _get_lock(file_path):
-            file_path.write_text(full_content, encoding="utf-8")
-    except Timeout:
-        raise PermissionError(f"Inbox file {filename} is currently locked.")
-
-        # --- SQLITE INDEXING ---
     rel_path = f"_Inbox/{filename}"
-    conn = get_db()
 
-    # 1. Update Search Index
-    conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (rel_path, full_content))
+    # 1. Initial Write (Fast)
+    header = f"---\nclipped: {datetime.now()}\nsource: {source}\n---\n\n# {title}\n\n"
+    file_path.write_text(header + content, encoding="utf-8")
 
-    # 2. Update Tags Index
-    tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', full_content))
-    for tag in tags:
-        conn.execute("INSERT INTO note_tags (path, tag) VALUES (?, ?)", (rel_path, tag.lower()))
-
-    conn.commit()
-    conn.close()
+    # 2. Schedule heavy I/O in the background
+    background_tasks.add_task(process_inbox_background, file_path, rel_path, content, source)
 
     return rel_path
+
+
+def process_inbox_background(file_path: Path, rel_path: str, content: str, source: str):
+    # Move the slow harvesting here
+    enriched_content = harvest_external_images(content, source)
+
+    with _get_lock(file_path):
+        # Re-read header to be safe, then overwrite with enriched content
+        file_path.write_text(enriched_content, encoding="utf-8")
+
+    # Re-index database
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO search_index (path, content) VALUES (?, ?)", (rel_path, enriched_content))
+    conn.commit()
+    conn.close()
 
 
 def rename_item(old_path: str, new_name: str) -> str:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
@@ -41,7 +41,7 @@ def get_note(file_path: str, user: str = Depends(verify_access)):
 
 
 @router.post("/notes/{file_path:path}")
-def save_note(file_path: str, note: NoteData, user: str = Depends(verify_access)):
+def save_note(file_path: str, note: NoteData, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
     final_path = file_system.save_note_content(file_path, note.content)
     return {"message": f"Note '{final_path}' saved successfully."}
 
@@ -138,10 +138,11 @@ def resolve_link(target: str, user: str = Depends(verify_access)):
 
 
 @router.post("/inbox")
-def add_to_inbox(item: InboxItem, user: str = Depends(verify_access)):
+def add_to_inbox(item: InboxItem, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
     """The Universal Inbox receiver. Push data here from anywhere."""
     try:
-        path = file_system.save_to_inbox(item.title, item.content, item.source)
+        # Refactor save_to_inbox to return early and harvest images in background
+        path = file_system.save_to_inbox_async(item.title, item.content, item.source, background_tasks)
         return {"message": "Successfully ingested into Inbox", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
