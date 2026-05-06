@@ -18,3 +18,8 @@ class InboxItem(BaseModel):
 
 class TokenRequest(BaseModel):
     name: str
+
+
+class RenameNote(BaseModel):
+    old_path: str
+    new_name: str

@@ -491,3 +491,37 @@ def save_to_inbox(title: str, content: str, source: str = "") -> str:
     conn.close()
 
     return rel_path
+
+
+def rename_item(old_path: str, new_name: str) -> str:
+    """Renames a file or folder and updates the SQLite indexes."""
+    old_target = VAULT_DIR / old_path
+    if not old_target.exists():
+        raise FileNotFoundError("Item not found.")
+
+    # Make sure we keep the .md extension for files
+    if old_target.is_file() and not new_name.endswith('.md'):
+        new_name += '.md'
+
+    new_target = old_target.parent / new_name
+    new_path = str(new_target.relative_to(VAULT_DIR)).replace("\\", "/")
+
+    # Rename on the hard drive
+    old_target.rename(new_target)
+
+    # Update the SQLite Database so search and tags don't break!
+    conn = get_db()
+    if old_target.is_file():
+        conn.execute("UPDATE search_index SET path = ? WHERE path = ?", (new_path, old_path))
+        conn.execute("UPDATE note_tags SET path = ? WHERE path = ?", (new_path, old_path))
+    else:
+        # If it's a folder, update ALL files inside it using string replacement
+        conn.execute("UPDATE search_index SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
+                     (old_path, new_path, f"{old_path}/%"))
+        conn.execute("UPDATE note_tags SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
+                     (old_path, new_path, f"{old_path}/%"))
+
+    conn.commit()
+    conn.close()
+
+    return new_path

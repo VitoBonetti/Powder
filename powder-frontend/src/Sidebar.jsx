@@ -168,7 +168,23 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
           ) : (
             <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
           )}
-          <span className="truncate">{node.name}</span>
+          {renamingPath === node.path ? (
+            <input
+              type="text"
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => submitRename(node.path)} // Saves when clicking away
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitRename(node.path);
+                if (e.key === 'Escape') setRenamingPath(null); // Cancels on ESC
+              }}
+              className="bg-[#010409] border border-blue-500 text-gray-200 px-1 py-0.5 rounded text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 ml-1"
+              onClick={(e) => e.stopPropagation()} // Prevents opening the file while clicking in the text box
+            />
+          ) : (
+            <span className="truncate select-none">{node.name}</span>
+          )}
         </div>
         <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0" />
       </div>
@@ -222,7 +238,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename }) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
@@ -243,6 +259,9 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
   const [viewMode, setViewMode] = useState('files'); // 'files' or 'tags'
   const [vaultTags, setVaultTags] = useState([]);
 
+  const [renamingPath, setRenamingPath] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+
   const startResizing = useCallback(() => {
     isResizing.current = true;
     document.body.style.cursor = 'col-resize';
@@ -261,6 +280,27 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
     document.body.style.cursor = 'default';
     document.body.style.userSelect = 'auto';
   }, []);
+
+  const submitRename = (oldPath) => {
+    if (!renameValue.trim() || oldPath.endsWith(renameValue) || oldPath.endsWith(`${renameValue}.md`)) {
+      setRenamingPath(null); // Cancel if empty or unchanged
+      return;
+    }
+
+    fetch(getApiUrl('/rename'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_path: oldPath, new_name: renameValue })
+    })
+    .then(res => res.json())
+    .then(data => {
+      setRenamingPath(null);
+      fetchTree();
+      if (onFileRename) onFileRename(oldPath, data.new_path);
+    })
+    .catch(err => console.error("Rename failed:", err));
+  };
 
   useEffect(() => {
     document.addEventListener('mousemove', resize);

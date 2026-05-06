@@ -123,6 +123,13 @@ function App() {
     });
   }, [activeFile]);
 
+  const handleFileRename = useCallback((oldPath, newPath) => {
+    setOpenTabs(prev => prev.map(t => (t === oldPath ? newPath : t)));
+    if (activeFile === oldPath) {
+      setActiveFile(newPath);
+    }
+  }, [activeFile]);
+
   const openFileInTab = (path) => {
     if (!openTabs.includes(path)) setOpenTabs(prev => [...prev, path]);
     setActiveFile(path);
@@ -140,7 +147,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-white overflow-hidden">
-      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} />
+      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />

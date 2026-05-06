@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, 
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
-from models.schemas import NoteData, MoveData, InboxItem
+from models.schemas import NoteData, MoveData, InboxItem, RenameNote
 from services import file_system
 from api.auth import verify_access
 import os
@@ -159,5 +159,14 @@ def search_by_tag(tag: str, user: str = Depends(verify_access)):
     """API Endpoint to fetch files matching a specific tag."""
     try:
         return file_system.get_files_by_tag(tag)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/rename")
+def rename_file_or_folder(req: RenameNote, user: str = Depends(verify_access)):
+    try:
+        new_path = file_system.rename_item(req.old_path, req.new_name)
+        return {"status": "success", "new_path": new_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
