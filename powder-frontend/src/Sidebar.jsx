@@ -614,7 +614,6 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
         </div>
       </Modal>
 
-      {/* ... (Existing import, createNote, createFolder, delete modals) ... */}
       <Modal isOpen={activeModal === 'import'} onClose={closeModal} title="Import into Vault">
         <p className="mb-4">Select what you would like to import into <strong className="text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
         <div className="flex flex-col gap-3">
