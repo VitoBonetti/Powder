@@ -55,7 +55,7 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
 };
 
 // --- TreeNode Component ---
-const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
+const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, setRenamingPath, renameValue, setRenameValue, submitRename }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -162,25 +162,34 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
         className="group flex items-center justify-between pl-4 py-1.5 hover:bg-gray-800 cursor-pointer text-gray-300 text-sm rounded-md transition-colors min-w-0"
         onClick={() => onFileSelect(node.path)}
       >
-        <div className="flex items-center truncate flex-1 min-w-0">
+        {/* 2. ADD THE onDoubleClick TRIGGER HERE */}
+        <div
+          className="flex items-center truncate flex-1 min-w-0"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setRenamingPath(node.path);
+            setRenameValue(node.name.replace('.md', ''));
+          }}
+        >
           {isImageFile ? (
             <ImageIcon className="w-4 h-4 mr-2 text-purple-400 flex-shrink-0" />
           ) : (
             <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
           )}
+
           {renamingPath === node.path ? (
             <input
               type="text"
               autoFocus
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={() => submitRename(node.path)} // Saves when clicking away
+              onBlur={() => submitRename(node.path)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submitRename(node.path);
-                if (e.key === 'Escape') setRenamingPath(null); // Cancels on ESC
+                if (e.key === 'Escape') setRenamingPath(null);
               }}
               className="bg-[#010409] border border-blue-500 text-gray-200 px-1 py-0.5 rounded text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 ml-1"
-              onClick={(e) => e.stopPropagation()} // Prevents opening the file while clicking in the text box
+              onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="truncate select-none">{node.name}</span>
@@ -229,7 +238,18 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal }) => {
       {(isOpen || isDragOver) && node.children && (
         <div className="pl-3 border-l border-gray-700 ml-2 mt-1">
           {node.children.map((child, index) => (
-            <TreeNode key={index} node={child} onFileSelect={onFileSelect} refreshTree={refreshTree} openModal={openModal} />
+            <TreeNode
+              key={index}
+              node={child}
+              onFileSelect={onFileSelect}
+              refreshTree={refreshTree}
+              openModal={openModal}
+              renamingPath={renamingPath}
+              setRenamingPath={setRenamingPath}
+              renameValue={renameValue}
+              setRenameValue={setRenameValue}
+              submitRename={submitRename}
+            />
           ))}
         </div>
       )}
@@ -465,7 +485,17 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
       <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
         {viewMode === 'files' ? (
           tree ? (
-            <TreeNode node={tree} onFileSelect={onFileSelect} refreshTree={fetchTree} openModal={openModal} />
+            <TreeNode
+              node={tree}
+              onFileSelect={onFileSelect}
+              refreshTree={fetchTree}
+              openModal={openModal}
+              renamingPath={renamingPath}
+              setRenamingPath={setRenamingPath}
+              renameValue={renameValue}
+              setRenameValue={setRenameValue}
+              submitRename={submitRename}
+            />
           ) : (
             <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
           )
