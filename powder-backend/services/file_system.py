@@ -680,8 +680,6 @@ def get_canvas_data(target_folder: str = None) -> dict:
                             "id": f"e-{rel_path}-{target_path}",
                             "source": rel_path,
                             "target": target_path,
-                            "animated": True,  # Gives a cool hacking data-flow effect
-                            "style": {"stroke": "#3b82f6", "strokeWidth": 2}
                         })
         except Exception as e:
             # If a file is malformed, just skip it

@@ -5,6 +5,7 @@ import { getApiUrl } from '../../config';
 import StickyNoteNode from './nodes/StickyNoteNode';
 import ActionNode from './nodes/ActionNode';
 import StartingNode from './nodes/StartingNode';
+import CustomEdge from './nodes/CustomEdge'; // <-- NEW IMPORT
 import Editor from '../Editor';
 import { X, ExternalLink, FolderGit2 } from 'lucide-react';
 
@@ -22,6 +23,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     starting_node: StartingNode
   }), []);
 
+  // <-- NEW EDGE TYPE
+  const edgeTypes = useMemo(() => ({ custom: CustomEdge }), []);
+
   const currentFolder = useMemo(() => {
     if (!activeFile || !activeFile.startsWith('10 - Assessments/')) return null;
     const parts = activeFile.split('/');
@@ -29,13 +33,53 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     return null;
   }, [activeFile]);
 
+  // <-- NEW DELETE LOGIC FOR THE TRASH CAN BUTTON
+  const handleDeleteEdge = useCallback((edgeId, source, target) => {
+    const targetNode = nodes.find(n => n.id === target);
+    if (!targetNode) return;
+    const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
+    const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
+
+    if (selectedFile === source) {
+      setFileContent(prev => {
+        const updatedText = prev.replace(linkRegex, '');
+        fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: updatedText }) });
+        return updatedText;
+      });
+    } else {
+      fetch(getApiUrl(`/notes/${source}`), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          const newContent = data.content.replace(linkRegex, '');
+          fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
+        });
+    }
+    setEdges(eds => eds.filter(e => e.id !== edgeId));
+  }, [nodes, selectedFile]);
+
+  const handleLabelEdge = () => alert("Label functionality coming soon!");
+
+  // OVERRIDE BACKEND EDGES TO FIX BUG 2 (ANIMATION RETURNING)
   const fetchCanvasData = useCallback(() => {
     if (!currentFolder) { setNodes([]); setEdges([]); return; }
     fetch(getApiUrl(`/canvas/data?folder=${encodeURIComponent(currentFolder)}`), { credentials: 'include' })
       .then(res => res.json())
-      .then(data => { setNodes(data.nodes); setEdges(data.edges); })
+      .then(data => {
+        setNodes(data.nodes);
+
+        // Force the backend edges to use our custom solid style and attach the buttons!
+        const formattedEdges = data.edges.map(e => ({
+          ...e,
+          type: 'custom',
+          animated: false,
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+          style: { stroke: "#3b82f6", strokeWidth: 2 },
+          data: { sourceNode: e.source, targetNode: e.target, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
+        }));
+        setEdges(formattedEdges);
+      })
       .catch(err => console.error("Failed to load canvas data", err));
-  }, [currentFolder]);
+  }, [currentFolder, handleDeleteEdge]);
 
   useEffect(() => { fetchCanvasData(); }, [fetchCanvasData]);
 
@@ -57,11 +101,16 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     return true;
   }, [nodes]);
 
-  // OPTIMISTIC EDITOR UPDATE ON CONNECT
   const onConnect = useCallback((params) => {
-    setEdges((eds) => addEdge({ ...params, animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 } }, eds));
+    setEdges((eds) => addEdge({
+      ...params,
+      type: 'custom', // <-- Use our edge
+      animated: false,
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+      style: { stroke: "#3b82f6", strokeWidth: 2 },
+      data: { sourceNode: params.source, targetNode: params.target, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
+    }, eds));
 
-    // Instantly write the WikiLink into the open text editor to prevent sync delays!
     if (selectedFile === params.source) {
       const targetNode = nodes.find(n => n.id === params.target);
       if (targetNode) {
@@ -76,7 +125,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       credentials: 'include',
       body: JSON.stringify({ source: params.source, target: params.target })
     }).catch(err => console.error("Failed to save edge:", err));
-  }, [selectedFile, nodes]);
+  }, [selectedFile, nodes, handleDeleteEdge]);
 
   const onNodeClick = useCallback((event, node) => {
     setSelectedFile(node.id);
@@ -96,17 +145,15 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     });
   };
 
-  // TRIGGER MODAL INSTEAD OF DIRECT CREATION
   const openSpawnModal = (nodeType, defaultTitle) => {
     if (nodeType !== 'starting_node' && !currentFolder) {
       alert("Please select a file inside an Assessment folder first!");
       return;
     }
     setModalConfig({ isOpen: true, type: nodeType, title: defaultTitle });
-    setNewNodeName(""); // Clear previous input
+    setNewNodeName("");
   };
 
-  // CONFIRM MODAL AND CREATE FILE
   const confirmCreateNode = () => {
     if (!newNodeName.trim()) return;
 
@@ -117,7 +164,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     if (nodeType === 'starting_node') {
       targetPath = `10 - Assessments/${safeName}/${safeName}_Scope.md`;
     } else {
-      // Append a small timestamp just to prevent accidental overwrites of identically named actions
       targetPath = `${currentFolder}/${safeName}_${Date.now().toString().slice(-4)}.md`;
     }
 
@@ -180,87 +226,36 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         if (targetNode) {
           const edgeId = `e-${selectedFile}-${targetNode.id}`;
           if (!newEdges.some(e => e.id === edgeId)) {
-            newEdges.push({ id: edgeId, source: selectedFile, target: targetNode.id, animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 } });
+            newEdges.push({
+              id: edgeId, source: selectedFile, target: targetNode.id,
+              type: 'custom', // <-- Use our edge
+              animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+              style: { stroke: "#3b82f6", strokeWidth: 2 },
+              data: { sourceNode: selectedFile, targetNode: targetNode.id, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
+            });
             edgesChanged = true;
           }
         }
       });
       return edgesChanged ? newEdges : currentEdges;
     });
-  }, [fileContent, selectedFile, nodes, setEdges]);
-
-  const onEdgesDelete = useCallback((edgesToDelete) => {
-    edgesToDelete.forEach(edge => {
-      const targetNode = nodes.find(n => n.id === edge.target);
-      if (targetNode) {
-        const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
-        const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
-
-        // If the file we are deleting the edge from is currently OPEN in the drawer,
-        // we MUST update the text editor instantly, or the Phase 7 hook will resurrect the edge!
-        if (selectedFile === edge.source) {
-          setFileContent(prev => {
-            const updatedText = prev.replace(linkRegex, '');
-            // Send the patched text to the backend
-            fetch(getApiUrl(`/notes/${edge.source}`), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ content: updatedText })
-            });
-            return updatedText;
-          });
-        } else {
-          // If the file is NOT open in the editor, just modify it in the background normally
-          fetch(getApiUrl(`/notes/${edge.source}`), { credentials: 'include' })
-            .then(res => res.json())
-            .then(data => {
-              const newContent = data.content.replace(linkRegex, '');
-              fetch(getApiUrl(`/notes/${edge.source}`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ content: newContent })
-              });
-            });
-        }
-      }
-    });
-  }, [nodes, selectedFile]);
+  }, [fileContent, selectedFile, nodes, setEdges, handleDeleteEdge]);
 
   const saveStickyNote = async (nodeId, newText, newColor) => {
     try {
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
-
       const match = data.content.match(/^---\n([\s\S]*?)\n---/);
       if (match) {
         let yaml = match[1];
-
-        // Update Color in YAML
-        if (/^color:.*$/m.test(yaml)) {
-          yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`);
-        } else {
-          yaml += `\ncolor: "${newColor}"`;
-        }
-
-        // Combine new YAML with new Text
+        if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`);
+        else yaml += `\ncolor: "${newColor}"`;
         const newContent = `---\n${yaml}\n---\n${newText}`;
-
-        // Save safely!
-        await fetch(getApiUrl(`/notes/${nodeId}`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ content: newContent })
-        });
+        await fetch(getApiUrl(`/notes/${nodeId}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
       }
-    } catch (err) {
-      console.error("Failed to save sticky note", err);
-    }
+    } catch (err) { console.error("Failed to save sticky note", err); }
   };
 
-  // We map over the nodes to inject this save function into them!
   const nodesWithCallbacks = nodes.map(n => ({
     ...n,
     data: { ...n.data, onUpdate: saveStickyNote }
@@ -268,24 +263,12 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
-
-      {/* UNIVERSAL CREATION MODAL */}
       {modalConfig.isOpen && (
         <div className="absolute inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-[#161b22] border border-gray-700 p-6 rounded-xl shadow-2xl w-96 flex flex-col gap-4">
-            <h3 className="text-white font-bold text-lg">
-              {modalConfig.type === 'starting_node' ? 'Create New Assessment' : `Create ${modalConfig.title}`}
-            </h3>
+            <h3 className="text-white font-bold text-lg">{modalConfig.type === 'starting_node' ? 'Create New Assessment' : `Create ${modalConfig.title}`}</h3>
             <p className="text-sm text-gray-400 -mt-2">Enter the name below.</p>
-            <input
-              autoFocus
-              type="text"
-              placeholder={modalConfig.type === 'starting_node' ? "e.g., Acme Corp Pentest" : "e.g., Nmap Quick Scan"}
-              value={newNodeName}
-              onChange={(e) => setNewNodeName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && confirmCreateNode()}
-              className="bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500"
-            />
+            <input autoFocus type="text" placeholder={modalConfig.type === 'starting_node' ? "e.g., Acme Corp Pentest" : "e.g., Nmap Quick Scan"} value={newNodeName} onChange={(e) => setNewNodeName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirmCreateNode()} className="bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500" />
             <div className="flex justify-end gap-3 mt-2">
               <button onClick={() => setModalConfig({ isOpen: false, type: '', title: '' })} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Cancel</button>
               <button onClick={confirmCreateNode} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors">Create</button>
@@ -299,9 +282,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
           <FolderGit2 className="w-16 h-16 text-gray-600 mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">No Assessment Selected</h2>
           <p className="mb-6">Select a file inside '10 - Assessments' or start a new one.</p>
-          <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="bg-[#0ea5e9] text-white px-6 py-3 rounded-lg shadow-lg hover:bg-sky-400 font-bold">
-            + Create New Assessment
-          </button>
+          <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="bg-[#0ea5e9] text-white px-6 py-3 rounded-lg shadow-lg hover:bg-sky-400 font-bold">+ Create New Assessment</button>
         </div>
       ) : (
         <div className="flex-1 h-full flex">
@@ -310,13 +291,13 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               nodes={nodesWithCallbacks}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes} // <-- ADDED CUSTOM EDGES HERE
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onNodeDoubleClick={onNodeClick}
-              onEdgesDelete={onEdgesDelete}
               proOptions={{ hideAttribution: true }}
               fitView
               theme="dark"
@@ -372,7 +353,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
                   )}
                 </div>
               )}
-
               <div className="flex-1 overflow-y-auto px-6 py-4 hide-scroll bg-[#0d1117]">
                 <Editor content={fileContent} onChange={handleEditorChange} onLinkClick={() => {}} onTagClick={() => {}} />
               </div>
