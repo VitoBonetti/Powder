@@ -614,12 +614,12 @@ command: "{parsed_data['command']}"
     return rel_path
 
 
-def get_canvas_data() -> dict:
+def get_canvas_data(target_folder: str = None) -> dict:
     """Scans the vault for Pentest nodes and returns them formatted for React Flow."""
     nodes = []
     edges = []
 
-    # 1. Build a quick lookup map of all files to resolve WikiLinks into edges
+    #  Build a quick lookup map of all files to resolve WikiLinks into edges
     conn = get_db()
     cursor = conn.execute("SELECT path, content FROM search_index")
     rows = cursor.fetchall()
@@ -627,8 +627,16 @@ def get_canvas_data() -> dict:
 
     file_map = {row["path"].split("/")[-1].replace(".md", "").lower(): row["path"] for row in rows}
 
-    # 2. Find all pentest nodes
-    for file_path in VAULT_DIR.rglob("*.md"):
+    # Determine where to search
+    search_dir = VAULT_DIR
+    if target_folder:
+        search_dir = VAULT_DIR / target_folder
+        # If the folder doesn't exist yet, return an empty canvas safely
+        if not search_dir.exists():
+            return {"nodes": [], "edges": []}
+
+    # Iterate ONLY through the target directory
+    for file_path in search_dir.rglob("*.md"):
         rel_path = str(file_path.relative_to(VAULT_DIR)).replace("\\", "/")
 
         # Skip templates
@@ -656,13 +664,13 @@ def get_canvas_data() -> dict:
                     }
                 }
 
-                # NEW: Force Sticky Notes to the absolute background!
+                # Force Sticky Notes to the absolute background!
                 if node_type == 'sticky_note':
                     react_flow_node["zIndex"] = -1
 
                 nodes.append(react_flow_node)
 
-                # 3. Extract WikiLinks and convert them to React Flow Edges!
+                # Extract WikiLinks and convert them to React Flow Edges!
                 wiki_links = set(re.findall(r'\[\[(.*?)\]\]', post.content))
                 for wl in wiki_links:
                     target_key = wl.lower().split('/')[-1]

@@ -256,7 +256,7 @@ function App() {
             </div>
           ) : viewMode === 'canvas' ? (
            <div className="h-full w-full p-2">
-              <CanvasView />
+              <CanvasView activeFile={activeFile} />
            </div>
           ) : (
             /* 3. EXPAND EDIT WIDTH */

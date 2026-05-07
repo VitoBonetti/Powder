@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks
 from fastapi.security.api_key import APIKeyHeader
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 from models.schemas import NoteData, MoveData, InboxItem, RenameNote, PositionData, EdgeData
 from services import file_system
@@ -212,10 +212,10 @@ async def import_pentest_scan(file: UploadFile = File(...), user: str = Depends(
 
 
 @router.get("/canvas/data")
-def fetch_canvas_data(user: str = Depends(verify_access)):
-    """Returns all nodes and edges for the React Flow canvas."""
+def fetch_canvas_data(folder: Optional[str] = None, user: str = Depends(verify_access)):
+    """Returns all nodes and edges for the React Flow canvas within a specific folder."""
     try:
-        return file_system.get_canvas_data()
+        return file_system.get_canvas_data(folder)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

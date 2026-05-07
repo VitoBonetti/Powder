@@ -1,35 +1,50 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// ADD addEdge to the import
 import { ReactFlow, Background, Controls, applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { getApiUrl } from '../../config';
-
 import StickyNoteNode from './nodes/StickyNoteNode';
 import ActionNode from './nodes/ActionNode';
-import StartingNode from './nodes/StartingNode'; // 1. IMPORT STARTING NODE
-
+import StartingNode from './nodes/StartingNode';
 import Editor from '../Editor';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, FolderGit2 } from 'lucide-react';
 
-export default function CanvasView() {
+// 1. ADD activeFile PROP HERE
+export default function CanvasView({ activeFile }) {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
 
-  // 2. ADD TO NODE TYPES
   const nodeTypes = useMemo(() => ({
     sticky_note: StickyNoteNode,
     action: ActionNode,
     starting_node: StartingNode
   }), []);
 
-  useEffect(() => {
-    fetch(getApiUrl('/canvas/data'), { credentials: 'include' })
+  // 2. CALCULATE CURRENT ASSESSMENT FOLDER
+  const currentFolder = useMemo(() => {
+    if (!activeFile || !activeFile.startsWith('10 - Assessments/')) return null;
+    const parts = activeFile.split('/');
+    if (parts.length >= 3) {
+      return `${parts[0]}/${parts[1]}`; // e.g., "10 - Assessments/Acme_Corp"
+    }
+    return null;
+  }, [activeFile]);
+
+  // 3. THE NEW FETCH LOGIC (Replaces the old global fetch)
+  const fetchCanvasData = useCallback(() => {
+    if (!currentFolder) {
+      setNodes([]); setEdges([]); return;
+    }
+    fetch(getApiUrl(`/canvas/data?folder=${encodeURIComponent(currentFolder)}`), { credentials: 'include' })
       .then(res => res.json())
       .then(data => { setNodes(data.nodes); setEdges(data.edges); })
       .catch(err => console.error("Failed to load canvas data", err));
-  }, []);
+  }, [currentFolder]);
+
+  useEffect(() => {
+    fetchCanvasData();
+  }, [fetchCanvasData]);
 
   const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
   const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
@@ -43,12 +58,8 @@ export default function CanvasView() {
     });
   }, []);
 
-  // 3. THE MAGIC TRICK: DRAWING EDGES = WRITING WIKILINKS
   const onConnect = useCallback((params) => {
-    // Instantly draw the edge on the screen for the user
     setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: "#3b82f6", strokeWidth: 2 } }, eds));
-
-    // Send to backend to permanently write it into the Markdown file!
     fetch(getApiUrl('/canvas/edge'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,35 +86,65 @@ export default function CanvasView() {
     });
   };
 
-  // Spawns a new Markdown file directly onto the canvas!
+  // 4. THE NEW SPAWN LOGIC (Handles Folders!)
   const handleSpawnNode = (nodeType, defaultTitle) => {
-    // Generate a unique filename
-    const fileName = `${defaultTitle.replace(/\s+/g, '_')}_${Date.now()}.md`;
-    const relPath = `Scans/${fileName}`;
+    let targetPath = "";
 
-    // Create the YAML frontmatter based on what button was clicked
+    // If they click "+ Target Scope", we create a BRAND NEW assessment folder
+    if (nodeType === 'starting_node') {
+      const projectName = prompt("Enter Assessment Name (e.g., Acme_Corp_Pentest):");
+      if (!projectName) return;
+
+      const safeProjectName = projectName.replace(/\s+/g, '_');
+      targetPath = `10 - Assessments/${safeProjectName}/Target_Scope.md`;
+    } else {
+      // If they spawn an Action/Sticky, it MUST go in the current folder
+      if (!currentFolder) {
+        alert("Please select a file inside an Assessment folder first!");
+        return;
+      }
+      const fileName = `${defaultTitle.replace(/\s+/g, '_')}_${Date.now()}.md`;
+      targetPath = `${currentFolder}/${fileName}`;
+    }
+
     let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\nx: 100\ny: 100\n`;
-
     if (nodeType === 'starting_node') frontmatter += `scope: "Internal Network"\n`;
     if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
     if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
-
     frontmatter += `---\n# ${defaultTitle}\n`;
 
-    // Save it directly to the vault using the exact same logic the Editor uses
-    fetch(getApiUrl(`/notes/${relPath}`), {
+    fetch(getApiUrl(`/notes/${targetPath}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ content: frontmatter })
     }).then(() => {
-      // Refresh the canvas to pull the newly created file!
-      fetch(getApiUrl('/canvas/data'), { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => { setNodes(data.nodes); setEdges(data.edges); });
+      if (nodeType === 'starting_node') {
+        window.location.reload(); // Reload to update sidebar with new folder
+      } else {
+        fetchCanvasData(); // Refresh canvas to show new node
+      }
     });
   };
 
+  // 5. BLANK STATE UI
+  if (!currentFolder) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#010409] rounded-xl border border-gray-800 text-gray-400">
+        <FolderGit2 className="w-16 h-16 text-gray-600 mb-4" />
+        <h2 className="text-xl font-bold text-white mb-2">No Assessment Selected</h2>
+        <p className="mb-6">Select a file inside '10 - Assessments' or start a new one.</p>
+        <button
+          onClick={() => handleSpawnNode('starting_node', 'Target Scope')}
+          className="bg-[#0ea5e9] text-white px-6 py-3 rounded-lg shadow-lg hover:bg-sky-400 font-bold"
+        >
+          + Create New Assessment
+        </button>
+      </div>
+    );
+  }
+
+  // 6. MAIN RENDER
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
       <div className="flex-1 h-full">
@@ -114,7 +155,7 @@ export default function CanvasView() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
-          onConnect={onConnect} // 4. WIRE UP THE CONNECTION EVENT
+          onConnect={onConnect}
           onNodeClick={onNodeClick}
           fitView
           theme="dark"
