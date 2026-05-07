@@ -37,28 +37,24 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
-  // NEW: DELETE NODES OFFICIALLY
+  const selectedFileRef = useRef(selectedFile);
+  useEffect(() => { selectedFileRef.current = selectedFile; }, [selectedFile]);
+
   const onNodesDelete = useCallback((nodesToDelete) => {
     nodesToDelete.forEach(node => {
-      // 1. Tell the backend to delete the physical markdown file
-      fetch(getApiUrl(`/notes/${node.id}`), {
-        method: 'DELETE',
-        credentials: 'include'
-      }).catch(err => console.error("Failed to delete file:", err));
-
-      // 2. If the drawer is open for this node, close it!
-      if (selectedFile === node.id) setSelectedFile(null);
+      fetch(getApiUrl(`/notes/${node.id}`), { method: 'DELETE', credentials: 'include' })
+        .catch(err => console.error("Failed to delete file:", err));
+      if (selectedFileRef.current === node.id) setSelectedFile(null);
     });
-  }, [selectedFile]);
+  }, []);
 
-  // <-- NEW DELETE LOGIC FOR THE TRASH CAN BUTTON
   const handleDeleteEdge = useCallback((edgeId, source, target) => {
-    const targetNode = nodes.find(n => n.id === target);
+    const targetNode = nodesRef.current.find(n => n.id === target);
     if (!targetNode) return;
     const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
     const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
 
-    if (selectedFile === source) {
+    if (selectedFileRef.current === source) {
       setFileContent(prev => {
         const updatedText = prev.replace(linkRegex, '');
         fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: updatedText }) });
@@ -73,7 +69,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         });
     }
     setEdges(eds => eds.filter(e => e.id !== edgeId));
-  }, [nodes, selectedFile]);
+  }, []);
 
   const handleLabelEdge = () => alert("Label functionality coming soon!");
 
