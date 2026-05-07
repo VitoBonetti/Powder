@@ -8,16 +8,15 @@ import StartingNode from './nodes/StartingNode';
 import Editor from '../Editor';
 import { X, ExternalLink, FolderGit2 } from 'lucide-react';
 
-// Added setActiveFile to props!
 export default function CanvasView({ activeFile, setActiveFile }) {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
 
-  // MODAL STATE FOR CREATING ASSESSMENTS
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
+  // FIX 1: UNIVERSAL MODAL STATE
+  const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
+  const [newNodeName, setNewNodeName] = useState("");
 
   const nodeTypes = useMemo(() => ({
     sticky_note: StickyNoteNode,
@@ -54,36 +53,32 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     });
   }, []);
 
-  // NEW: ENFORCE DIRECTION RULES (Starting Nodes cannot receive edges!)
   const isValidConnection = useCallback((connection) => {
     const targetNode = nodes.find(n => n.id === connection.target);
-    if (targetNode && targetNode.type === 'starting_node') {
-      return false; // Blocks the UI from snapping to the starting node
-    }
+    if (targetNode && targetNode.type === 'starting_node') return false;
     return true;
   }, [nodes]);
 
-  // FIX: STOP PHASE 7 FROM DELETING ARROWS WHEN DRAGGED
+  // FIX 2: OPTIMISTIC EDITOR UPDATE ON CONNECT
   const onConnect = useCallback((params) => {
     setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: "#3b82f6", strokeWidth: 2 } }, eds));
+
+    // Instantly write the WikiLink into the open text editor to prevent sync delays!
+    if (selectedFile === params.source) {
+      const targetNode = nodes.find(n => n.id === params.target);
+      if (targetNode) {
+        const linkTitle = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
+        setFileContent(prev => prev + `\n[[${linkTitle}]]\n`);
+      }
+    }
 
     fetch(getApiUrl('/canvas/edge'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ source: params.source, target: params.target })
-    }).then(() => {
-      // If the node we just dragged from is currently open in the drawer,
-      // we MUST update the text editor, otherwise Phase 7 will delete the edge!
-      if (selectedFile === params.source) {
-        fetch(getApiUrl(`/notes/${params.source}`), { credentials: 'include' })
-          .then(res => res.json())
-          .then(data => setFileContent(data.content));
-      } else {
-        fetchCanvasData(); // Force backend sync
-      }
     }).catch(err => console.error("Failed to save edge:", err));
-  }, [selectedFile, fetchCanvasData]);
+  }, [selectedFile, nodes]);
 
   const onNodeClick = useCallback((event, node) => {
     setSelectedFile(node.id);
@@ -103,15 +98,36 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     });
   };
 
-  // FIX: UNIQUE FILE NAMING AND CUSTOM MODAL LOGIC
-  const confirmCreateAssessment = () => {
-    if (!newProjectName.trim()) return;
+  // TRIGGER MODAL INSTEAD OF DIRECT CREATION
+  const openSpawnModal = (nodeType, defaultTitle) => {
+    if (nodeType !== 'starting_node' && !currentFolder) {
+      alert("Please select a file inside an Assessment folder first!");
+      return;
+    }
+    setModalConfig({ isOpen: true, type: nodeType, title: defaultTitle });
+    setNewNodeName(""); // Clear previous input
+  };
 
-    const safeProjectName = newProjectName.trim().replace(/\s+/g, '_');
-    // Ensure every assessment has a mathematically unique starting file name!
-    const targetPath = `10 - Assessments/${safeProjectName}/${safeProjectName}_Scope.md`;
+  // CONFIRM MODAL AND CREATE FILE
+  const confirmCreateNode = () => {
+    if (!newNodeName.trim()) return;
 
-    const frontmatter = `---\ntype: pentest_node\nnode_type: starting_node\nx: 100\ny: 100\nscope: "Black Box"\n---\n# ${newProjectName.trim()} Scope\n`;
+    const safeName = newNodeName.trim().replace(/\s+/g, '_');
+    const nodeType = modalConfig.type;
+    let targetPath = "";
+
+    if (nodeType === 'starting_node') {
+      targetPath = `10 - Assessments/${safeName}/${safeName}_Scope.md`;
+    } else {
+      // Append a small timestamp just to prevent accidental overwrites of identically named actions
+      targetPath = `${currentFolder}/${safeName}_${Date.now().toString().slice(-4)}.md`;
+    }
+
+    let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\nx: 100\ny: 100\n`;
+    if (nodeType === 'starting_node') frontmatter += `scope: "Black Box"\n`;
+    if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
+    if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
+    frontmatter += `---\n# ${newNodeName.trim()}\n`;
 
     fetch(getApiUrl(`/notes/${targetPath}`), {
       method: 'POST',
@@ -119,42 +135,14 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       credentials: 'include',
       body: JSON.stringify({ content: frontmatter })
     }).then(() => {
-      setShowNewModal(false);
-      setNewProjectName("");
-      // Soft-navigate without reloading the whole web app!
-      if (setActiveFile) {
-        setActiveFile(targetPath);
+      setModalConfig({ isOpen: false, type: '', title: '' });
+      if (nodeType === 'starting_node') {
+        if (setActiveFile) setActiveFile(targetPath);
+        else window.location.reload();
       } else {
-        window.location.reload();
+        fetchCanvasData();
       }
     });
-  };
-
-  const handleSpawnNode = (nodeType, defaultTitle) => {
-    if (nodeType === 'starting_node') {
-      setShowNewModal(true); // Open our sleek custom modal instead of prompt()
-      return;
-    }
-
-    if (!currentFolder) {
-      alert("Please select a file inside an Assessment folder first!");
-      return;
-    }
-
-    const fileName = `${defaultTitle.replace(/\s+/g, '_')}_${Date.now()}.md`;
-    const targetPath = `${currentFolder}/${fileName}`;
-
-    let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\nx: 100\ny: 100\n`;
-    if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
-    if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
-    frontmatter += `---\n# ${defaultTitle}\n`;
-
-    fetch(getApiUrl(`/notes/${targetPath}`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ content: frontmatter })
-    }).then(() => fetchCanvasData());
   };
 
   const updateNodeMetadata = (key, value) => {
@@ -177,7 +165,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   const selectedNodeData = selectedFile ? nodes.find(n => n.id === selectedFile) : null;
 
-  // PHASE 7: TWO-WAY EDGE SYNC
   useEffect(() => {
     if (!selectedFile || !fileContent) return;
     const wikiLinkRegex = /\[\[(.*?)\]\]/g;
@@ -207,24 +194,26 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
 
-      {/* NEW: THE CREATION MODAL OVERLAY */}
-      {showNewModal && (
+      {/* UNIVERSAL CREATION MODAL */}
+      {modalConfig.isOpen && (
         <div className="absolute inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-[#161b22] border border-gray-700 p-6 rounded-xl shadow-2xl w-96 flex flex-col gap-4">
-            <h3 className="text-white font-bold text-lg">Create New Assessment</h3>
-            <p className="text-sm text-gray-400 -mt-2">Enter the target scope or project name.</p>
+            <h3 className="text-white font-bold text-lg">
+              {modalConfig.type === 'starting_node' ? 'Create New Assessment' : `Create ${modalConfig.title}`}
+            </h3>
+            <p className="text-sm text-gray-400 -mt-2">Enter the name below.</p>
             <input
               autoFocus
               type="text"
-              placeholder="e.g., Acme Corp Pentest"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && confirmCreateAssessment()}
+              placeholder={modalConfig.type === 'starting_node' ? "e.g., Acme Corp Pentest" : "e.g., Nmap Quick Scan"}
+              value={newNodeName}
+              onChange={(e) => setNewNodeName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmCreateNode()}
               className="bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500"
             />
             <div className="flex justify-end gap-3 mt-2">
-              <button onClick={() => setShowNewModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Cancel</button>
-              <button onClick={confirmCreateAssessment} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors">Create Assessment</button>
+              <button onClick={() => setModalConfig({ isOpen: false, type: '', title: '' })} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Cancel</button>
+              <button onClick={confirmCreateNode} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors">Create</button>
             </div>
           </div>
         </div>
@@ -235,7 +224,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
           <FolderGit2 className="w-16 h-16 text-gray-600 mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">No Assessment Selected</h2>
           <p className="mb-6">Select a file inside '10 - Assessments' or start a new one.</p>
-          <button onClick={() => setShowNewModal(true)} className="bg-[#0ea5e9] text-white px-6 py-3 rounded-lg shadow-lg hover:bg-sky-400 font-bold">
+          <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="bg-[#0ea5e9] text-white px-6 py-3 rounded-lg shadow-lg hover:bg-sky-400 font-bold">
             + Create New Assessment
           </button>
         </div>
@@ -250,7 +239,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               onEdgesChange={onEdgesChange}
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
-              isValidConnection={isValidConnection} /* ENFORCES EDGE DIRECTION */
+              isValidConnection={isValidConnection}
               onNodeClick={onNodeClick}
               fitView
               theme="dark"
@@ -258,9 +247,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               <Background color="#30363d" gap={16} />
               <Controls className="bg-gray-800 border-gray-700 fill-white" />
               <div className="absolute top-4 left-4 z-50 flex gap-2">
-                <button onClick={() => setShowNewModal(true)} className="bg-[#0ea5e9] text-white px-2 py-1 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-1 text-sm font-bold">+ Target Scope</button>
-                <button onClick={() => handleSpawnNode('action', 'New Action')} className="bg-[#161b22] border border-gray-700 text-gray-300 px-2 py-1 rounded-lg shadow-lg hover:text-white transition flex items-center gap-1 text-sm font-bold">+ Action Node</button>
-                <button onClick={() => handleSpawnNode('sticky_note', 'New Note')} className="bg-[#fef08a] text-yellow-900 px-2 py-1 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-1 text-sm font-bold">+ Sticky Note</button>
+                <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="bg-[#0ea5e9] text-white px-2 py-1 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-1 text-sm font-bold">+ Target Scope</button>
+                <button onClick={() => openSpawnModal('action', 'Action Node')} className="bg-[#161b22] border border-gray-700 text-gray-300 px-2 py-1 rounded-lg shadow-lg hover:text-white transition flex items-center gap-1 text-sm font-bold">+ Action Node</button>
+                <button onClick={() => openSpawnModal('sticky_note', 'Sticky Note')} className="bg-[#fef08a] text-yellow-900 px-2 py-1 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-1 text-sm font-bold">+ Sticky Note</button>
               </div>
             </ReactFlow>
           </div>
