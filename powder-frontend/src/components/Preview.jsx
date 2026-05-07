@@ -54,7 +54,6 @@ const MermaidDiagram = ({ chart }) => {
 };
 
 export default function Preview({ content, onLinkClick, onTagClick }) {
-  const displayContent = content ? content.replace(/^---\n([\s\S]*?)\n---\n*/, '') : '';
   return (
     <div className="prose prose-invert prose-lg max-w-none pb-20">
       <ReactMarkdown
@@ -141,10 +140,10 @@ export default function Preview({ content, onLinkClick, onTagClick }) {
         }}
       >
         {content
+          .replace(/^---\n([\s\S]*?)\n---\n*/, '')
           .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[[${noteName}]](#wiki/${encodeURIComponent(noteName)})`)
           .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[#${tag}](#tag/${tag})`)
         }
-        {displayContent}
       </ReactMarkdown>
     </div>
   );
