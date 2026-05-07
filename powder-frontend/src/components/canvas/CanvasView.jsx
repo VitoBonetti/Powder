@@ -8,7 +8,6 @@ import StartingNode from './nodes/StartingNode';
 import Editor from '../Editor';
 import { X, ExternalLink, FolderGit2 } from 'lucide-react';
 
-// 1. ADD activeFile PROP HERE
 export default function CanvasView({ activeFile }) {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -21,17 +20,17 @@ export default function CanvasView({ activeFile }) {
     starting_node: StartingNode
   }), []);
 
-  // 2. CALCULATE CURRENT ASSESSMENT FOLDER
+  // CALCULATE CURRENT ASSESSMENT FOLDER
   const currentFolder = useMemo(() => {
     if (!activeFile || !activeFile.startsWith('10 - Assessments/')) return null;
     const parts = activeFile.split('/');
     if (parts.length >= 3) {
-      return `${parts[0]}/${parts[1]}`; // e.g., "10 - Assessments/Acme_Corp"
+      return `${parts[0]}/${parts[1]}`;
     }
     return null;
   }, [activeFile]);
 
-  // 3. THE NEW FETCH LOGIC (Replaces the old global fetch)
+  // FETCH DATA ONLY FOR THIS FOLDER
   const fetchCanvasData = useCallback(() => {
     if (!currentFolder) {
       setNodes([]); setEdges([]); return;
@@ -86,11 +85,9 @@ export default function CanvasView({ activeFile }) {
     });
   };
 
-  // 4. THE NEW SPAWN LOGIC (Handles Folders!)
   const handleSpawnNode = (nodeType, defaultTitle) => {
     let targetPath = "";
 
-    // If they click "+ Target Scope", we create a BRAND NEW assessment folder
     if (nodeType === 'starting_node') {
       const projectName = prompt("Enter Assessment Name (e.g., Acme_Corp_Pentest):");
       if (!projectName) return;
@@ -98,7 +95,6 @@ export default function CanvasView({ activeFile }) {
       const safeProjectName = projectName.replace(/\s+/g, '_');
       targetPath = `10 - Assessments/${safeProjectName}/Target_Scope.md`;
     } else {
-      // If they spawn an Action/Sticky, it MUST go in the current folder
       if (!currentFolder) {
         alert("Please select a file inside an Assessment folder first!");
         return;
@@ -120,14 +116,54 @@ export default function CanvasView({ activeFile }) {
       body: JSON.stringify({ content: frontmatter })
     }).then(() => {
       if (nodeType === 'starting_node') {
-        window.location.reload(); // Reload to update sidebar with new folder
+        window.location.reload();
       } else {
-        fetchCanvasData(); // Refresh canvas to show new node
+        fetchCanvasData();
       }
     });
   };
 
-  // 5. BLANK STATE UI
+  // --- PHASE 6 ADDITIONS START HERE ---
+
+  // 1. Modifies the YAML frontmatter instantly when a UI dropdown is changed
+  const updateNodeMetadata = (key, value) => {
+    setNodes(nds => nds.map(n => n.id === selectedFile ? { ...n, data: { ...n.data, [key]: value } } : n));
+
+    setFileContent(prev => {
+      const yamlRegex = /^---\n([\s\S]*?)\n---/;
+      const match = prev.match(yamlRegex);
+
+      if (match) {
+        let yaml = match[1];
+        const keyRegex = new RegExp(`^${key}:.*$`, 'm');
+
+        if (keyRegex.test(yaml)) {
+          yaml = yaml.replace(keyRegex, `${key}: "${value}"`);
+        } else {
+          yaml += `\n${key}: "${value}"`;
+        }
+
+        const newContent = prev.replace(yamlRegex, `---\n${yaml}\n---`);
+
+        fetch(getApiUrl(`/notes/${selectedFile}`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ content: newContent })
+        });
+
+        return newContent;
+      }
+      return prev;
+    });
+  };
+
+  // 2. Safely find the data for the currently open file to drive the Drawer UI
+  const selectedNodeData = selectedFile ? nodes.find(n => n.id === selectedFile) : null;
+
+  // --- PHASE 6 ADDITIONS END HERE ---
+
+
   if (!currentFolder) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-[#010409] rounded-xl border border-gray-800 text-gray-400">
@@ -144,7 +180,6 @@ export default function CanvasView({ activeFile }) {
     );
   }
 
-  // 6. MAIN RENDER
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
       <div className="flex-1 h-full">
@@ -163,24 +198,9 @@ export default function CanvasView({ activeFile }) {
           <Background color="#30363d" gap={16} />
           <Controls className="bg-gray-800 border-gray-700 fill-white" />
           <div className="absolute top-4 left-4 z-50 flex gap-2">
-            <button
-              onClick={() => handleSpawnNode('starting_node', 'New Target Scope')}
-              className="bg-[#0ea5e9] text-white px-2 py-1 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-1 text-sm font-bold"
-            >
-              + Target Scope
-            </button>
-            <button
-              onClick={() => handleSpawnNode('action', 'New Action')}
-              className="bg-[#161b22] border border-gray-700 text-gray-300 px-2 py-1 rounded-lg shadow-lg hover:text-white transition flex items-center gap-1 text-sm font-bold"
-            >
-              + Action Node
-            </button>
-            <button
-              onClick={() => handleSpawnNode('sticky_note', 'New Note')}
-              className="bg-[#fef08a] text-yellow-900 px-2 py-1 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-1 text-sm font-bold"
-            >
-              + Sticky Note
-            </button>
+            <button onClick={() => handleSpawnNode('starting_node', 'New Target Scope')} className="bg-[#0ea5e9] text-white px-2 py-1 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-1 text-sm font-bold">+ Target Scope</button>
+            <button onClick={() => handleSpawnNode('action', 'New Action')} className="bg-[#161b22] border border-gray-700 text-gray-300 px-2 py-1 rounded-lg shadow-lg hover:text-white transition flex items-center gap-1 text-sm font-bold">+ Action Node</button>
+            <button onClick={() => handleSpawnNode('sticky_note', 'New Note')} className="bg-[#fef08a] text-yellow-900 px-2 py-1 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-1 text-sm font-bold">+ Sticky Note</button>
           </div>
         </ReactFlow>
       </div>
@@ -197,6 +217,42 @@ export default function CanvasView({ activeFile }) {
               <button onClick={() => setSelectedFile(null)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"><X className="w-5 h-5"/></button>
             </div>
           </div>
+
+          {/* PHASE 6: THE SETTINGS BAR */}
+          {selectedNodeData && (
+            <div className="bg-[#111827] border-b border-gray-800 px-4 py-2 flex items-center gap-3">
+              <span className="text-xs text-gray-500 font-bold">SETTINGS:</span>
+
+              {selectedNodeData.type === 'starting_node' && (
+                <select value={selectedNodeData.data.scope || 'Internal Network'} onChange={(e) => updateNodeMetadata('scope', e.target.value)} className="bg-[#161b22] text-sky-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
+                  <option value="White Box">White Box</option>
+                  <option value="Black Box">Black Box</option>
+                  <option value="Adversary Simulation">Adversary Simulation</option>
+                  <option value="Internal Network">Internal Network</option>
+                  <option value="Web Application">Web Application</option>
+                </select>
+              )}
+
+              {selectedNodeData.type === 'action' && (
+                <select value={selectedNodeData.data.phase || 'Enumeration'} onChange={(e) => updateNodeMetadata('phase', e.target.value)} className="bg-[#161b22] text-emerald-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
+                  <option value="Reconnaissance">Reconnaissance</option>
+                  <option value="Enumeration">Enumeration</option>
+                  <option value="Exploitation">Exploitation</option>
+                  <option value="PostExploitation">PostExploitation</option>
+                  <option value="Reporting">Reporting</option>
+                </select>
+              )}
+
+              {selectedNodeData.type === 'sticky_note' && (
+                <div className="flex gap-1.5 ml-2">
+                  {['#fef08a', '#bbf7d0', '#bae6fd', '#fbcfe8', '#e9d5ff', '#e2e8f0'].map(color => (
+                    <button key={color} onClick={() => updateNodeMetadata('color', color)} className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${selectedNodeData.data.color === color ? 'border-white' : 'border-gray-700'}`} style={{ backgroundColor: color }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto px-6 py-4 hide-scroll bg-[#0d1117]">
             <Editor content={fileContent} onChange={handleEditorChange} onLinkClick={() => {}} onTagClick={() => {}} />
           </div>
