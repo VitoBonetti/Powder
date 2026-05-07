@@ -19,6 +19,14 @@ export default function StartingNode({ id, data, selected }) {
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
         {/* Only has a Source Handle (it's the start!) */}
         <Handle type="source" position={Position.Right} style={{ width: '6px', height: '6px', background: '#fff', border: '2px solid #94a3b8', right: '-4px' }} />
+        {selected && (
+          <button
+            onClick={(e) => { e.stopPropagation(); data.onQuickAdd && data.onQuickAdd(id); }}
+            className="nodrag absolute -right-6 top-1/2 -translate-y-1/2 w-5 h-5 bg-blue-500 hover:bg-blue-400 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-md transition-transform hover:scale-110 z-50"
+          >
+            +
+          </button>
+        )}
       </div>
 
       <div style={{ marginTop: '6px', textAlign: 'center' }}>

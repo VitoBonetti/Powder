@@ -5,9 +5,10 @@ import { getApiUrl } from '../../config';
 import StickyNoteNode from './nodes/StickyNoteNode';
 import ActionNode from './nodes/ActionNode';
 import StartingNode from './nodes/StartingNode';
-import CustomEdge from './nodes/CustomEdge'; // <-- NEW IMPORT
+import CustomEdge from './nodes/CustomEdge';
 import Editor from '../Editor';
-import { X, ExternalLink, FolderGit2 } from 'lucide-react';
+// NEW ICONS FOR PALETTE AND DELETE
+import { X, ExternalLink, FolderGit2, Target, Zap, StickyNote, Trash2 } from 'lucide-react';
 
 export default function CanvasView({ activeFile, setActiveFile }) {
   const [nodes, setNodes] = useState([]);
@@ -17,13 +18,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
   const [newNodeName, setNewNodeName] = useState("");
 
-  const nodeTypes = useMemo(() => ({
-    sticky_note: StickyNoteNode,
-    action: ActionNode,
-    starting_node: StartingNode
-  }), []);
-
-  // <-- NEW EDGE TYPE
+  const nodeTypes = useMemo(() => ({ sticky_note: StickyNoteNode, action: ActionNode, starting_node: StartingNode }), []);
   const edgeTypes = useMemo(() => ({ custom: CustomEdge }), []);
 
   const currentFolder = useMemo(() => {
@@ -33,13 +28,12 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     return null;
   }, [activeFile]);
 
-  // PERFORMANCE FIX: Keep a quiet reference to nodes so Phase 7 doesn't trigger 60x a second!
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-
   const selectedFileRef = useRef(selectedFile);
   useEffect(() => { selectedFileRef.current = selectedFile; }, [selectedFile]);
 
+  // FIX 2: CAN DELETE NODES VIA UI OR CANVAS
   const onNodesDelete = useCallback((nodesToDelete) => {
     nodesToDelete.forEach(node => {
       fetch(getApiUrl(`/notes/${node.id}`), { method: 'DELETE', credentials: 'include' })
@@ -52,7 +46,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     const targetNode = nodesRef.current.find(n => n.id === target);
     if (!targetNode) return;
     const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
-    const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
+    // REGEX UPDATED TO MATCH LABELS: [[Title]] or [[Title|Label]]
+    const linkRegex = new RegExp(`\\[\\[${title}(?:\\|.*?)?\\]\\]\\n?`, 'gi');
 
     if (selectedFileRef.current === source) {
       setFileContent(prev => {
@@ -71,29 +66,64 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     setEdges(eds => eds.filter(e => e.id !== edgeId));
   }, []);
 
-  const handleLabelEdge = () => alert("Label functionality coming soon!");
+  // FIX 5: EDGE LABELS
+  const handleLabelEdge = useCallback((edgeId, source, target, currentLabel) => {
+    const newLabel = prompt("Enter connection label:", currentLabel || "");
+    if (newLabel === null) return; // User cancelled
 
-  // OVERRIDE BACKEND EDGES TO FIX BUG 2 (ANIMATION RETURNING)
+    const targetNode = nodesRef.current.find(n => n.id === target);
+    if (!targetNode) return;
+    const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
+
+    // Replace old link with new labeled link
+    const oldLinkRegex = new RegExp(`\\[\\[${title}(?:\\|.*?)?\\]\\]`, 'gi');
+    const newLink = newLabel.trim() === "" ? `[[${title}]]` : `[[${title}|${newLabel.trim()}]]`;
+
+    const rewriteFile = (text) => text.replace(oldLinkRegex, newLink);
+
+    if (selectedFileRef.current === source) {
+      setFileContent(prev => {
+        const updatedText = rewriteFile(prev);
+        fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: updatedText }) });
+        return updatedText;
+      });
+    } else {
+      fetch(getApiUrl(`/notes/${source}`), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: rewriteFile(data.content) }) });
+        });
+    }
+    // Refresh canvas to pull new label
+    fetchCanvasData();
+  }, []);
+
   const fetchCanvasData = useCallback(() => {
     if (!currentFolder) { setNodes([]); setEdges([]); return; }
     fetch(getApiUrl(`/canvas/data?folder=${encodeURIComponent(currentFolder)}`), { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
-        setNodes(data.nodes);
+        // Read dimensions properly for Sticky Notes
+        const formattedNodes = data.nodes.map(n => {
+          if (n.type === 'sticky_note') {
+            const widthMatch = n.data.note.match(/^width:.*"(\d+)".*$/m);
+            const heightMatch = n.data.note.match(/^height:.*"(\d+)".*$/m);
+            if (widthMatch) n.data.width = parseInt(widthMatch[1]);
+            if (heightMatch) n.data.height = parseInt(heightMatch[1]);
+          }
+          return n;
+        });
+        setNodes(formattedNodes);
 
-        // Force the backend edges to use our custom solid style and attach the buttons!
+        // Map labels from backend
         const formattedEdges = data.edges.map(e => ({
-          ...e,
-          type: 'custom',
-          animated: false,
-          markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-          style: { stroke: "#3b82f6", strokeWidth: 2 },
-          data: { sourceNode: e.source, targetNode: e.target, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
+          ...e, type: 'custom', animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 },
+          data: { sourceNode: e.source, targetNode: e.target, label: e.label, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
         }));
         setEdges(formattedEdges);
       })
       .catch(err => console.error("Failed to load canvas data", err));
-  }, [currentFolder, handleDeleteEdge]);
+  }, [currentFolder, handleDeleteEdge, handleLabelEdge]);
 
   useEffect(() => { fetchCanvasData(); }, [fetchCanvasData]);
 
@@ -117,11 +147,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   const onConnect = useCallback((params) => {
     setEdges((eds) => addEdge({
-      ...params,
-      type: 'custom', // <-- Use our edge
-      animated: false,
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-      style: { stroke: "#3b82f6", strokeWidth: 2 },
+      ...params, type: 'custom', animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 },
       data: { sourceNode: params.source, targetNode: params.target, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
     }, eds));
 
@@ -132,14 +158,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         setFileContent(prev => prev + `\n[[${linkTitle}]]\n`);
       }
     }
-
-    fetch(getApiUrl('/canvas/edge'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ source: params.source, target: params.target })
-    }).catch(err => console.error("Failed to save edge:", err));
-  }, [selectedFile, nodes, handleDeleteEdge]);
+    fetch(getApiUrl('/canvas/edge'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source: params.source, target: params.target }) });
+  }, [selectedFile, nodes, handleDeleteEdge, handleLabelEdge]);
 
   const onNodeClick = useCallback((event, node) => {
     setSelectedFile(node.id);
@@ -149,59 +169,66 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       .catch(err => console.error("Failed to load note content", err));
   }, []);
 
-  const handleEditorChange = (newContent) => {
-    setFileContent(newContent);
-    fetch(getApiUrl(`/notes/${selectedFile}`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ content: newContent })
-    });
+  // FIX 1: YAML STRIPPER LOGIC
+  const handleEditorChange = (newTextWithoutYaml) => {
+    const match = fileContent.match(/^---\n([\s\S]*?)\n---\n*/);
+    const yaml = match ? match[0] : '';
+    const fullNewContent = yaml + newTextWithoutYaml;
+
+    setFileContent(fullNewContent);
+    fetch(getApiUrl(`/notes/${selectedFile}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: fullNewContent }) });
   };
 
+  // This physically hides the YAML from the user's Editor view!
+  const displayContent = useMemo(() => fileContent.replace(/^---\n([\s\S]*?)\n---\n*/, ''), [fileContent]);
+
   const openSpawnModal = (nodeType, defaultTitle) => {
-    if (nodeType !== 'starting_node' && !currentFolder) {
-      alert("Please select a file inside an Assessment folder first!");
-      return;
-    }
+    if (nodeType !== 'starting_node' && !currentFolder) { alert("Please select a file inside an Assessment folder first!"); return; }
     setModalConfig({ isOpen: true, type: nodeType, title: defaultTitle });
     setNewNodeName("");
   };
 
   const confirmCreateNode = () => {
     if (!newNodeName.trim()) return;
-
     const safeName = newNodeName.trim().replace(/\s+/g, '_');
     const nodeType = modalConfig.type;
     let targetPath = "";
 
-    if (nodeType === 'starting_node') {
-      targetPath = `10 - Assessments/${safeName}/${safeName}_Scope.md`;
+    if (nodeType === 'starting_node') targetPath = `10 - Assessments/${safeName}/${safeName}_Scope.md`;
+    else targetPath = `${currentFolder}/${safeName}_${Date.now().toString().slice(-4)}.md`;
+
+    let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\n`;
+    if (modalConfig.quickAddSource) {
+       // Offset position slightly from source node
+       frontmatter += `x: ${modalConfig.quickAddSource.x + 250}\ny: ${modalConfig.quickAddSource.y}\n`;
     } else {
-      targetPath = `${currentFolder}/${safeName}_${Date.now().toString().slice(-4)}.md`;
+       frontmatter += `x: 100\ny: 100\n`;
     }
 
-    let frontmatter = `---\ntype: pentest_node\nnode_type: ${nodeType}\nx: 100\ny: 100\n`;
     if (nodeType === 'starting_node') frontmatter += `scope: "Black Box"\n`;
     if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
     if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
     frontmatter += `---\n# ${newNodeName.trim()}\n`;
 
-    fetch(getApiUrl(`/notes/${targetPath}`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ content: frontmatter })
-    }).then(() => {
-      setModalConfig({ isOpen: false, type: '', title: '' });
-      if (nodeType === 'starting_node') {
-        if (setActiveFile) setActiveFile(targetPath);
-        else window.location.reload();
-      } else {
-        fetchCanvasData();
+    fetch(getApiUrl(`/notes/${targetPath}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: frontmatter }) }).then(() => {
+      // FIX 3: IF QUICK ADD, INSTANTLY CONNECT THEM
+      if (modalConfig.quickAddSource) {
+        fetch(getApiUrl('/canvas/edge'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source: modalConfig.quickAddSource.id, target: targetPath }) });
       }
+      setModalConfig({ isOpen: false, type: '', title: '', quickAddSource: null });
+      if (nodeType === 'starting_node') {
+        if (setActiveFile) setActiveFile(targetPath); else window.location.reload();
+      } else { fetchCanvasData(); }
     });
   };
+
+  // FIX 3: QUICK ADD TRIGGER
+  const handleQuickAdd = useCallback((sourceNodeId) => {
+    const sourceNode = nodesRef.current.find(n => n.id === sourceNodeId);
+    if (!sourceNode) return;
+    setModalConfig({ isOpen: true, type: 'action', title: 'New Action Node', quickAddSource: { id: sourceNode.id, x: sourceNode.position.x, y: sourceNode.position.y } });
+    setNewNodeName("");
+  }, []);
 
   const updateNodeMetadata = (key, value) => {
     setNodes(nds => nds.map(n => n.id === selectedFile ? { ...n, data: { ...n.data, [key]: value } } : n));
@@ -211,8 +238,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       if (match) {
         let yaml = match[1];
         const keyRegex = new RegExp(`^${key}:.*$`, 'm');
-        if (keyRegex.test(yaml)) yaml = yaml.replace(keyRegex, `${key}: "${value}"`);
-        else yaml += `\n${key}: "${value}"`;
+        if (keyRegex.test(yaml)) yaml = yaml.replace(keyRegex, `${key}: "${value}"`); else yaml += `\n${key}: "${value}"`;
         const newContent = prev.replace(yamlRegex, `---\n${yaml}\n---`);
         fetch(getApiUrl(`/notes/${selectedFile}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
         return newContent;
@@ -225,60 +251,59 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   useEffect(() => {
     if (!selectedFile || !fileContent) return;
-
-    const wikiLinkRegex = /\[\[(.*?)\]\]/g;
+    // REGEX NOW SUPPORTS ALIAS LABELS: [[Target|Label]]
+    const wikiLinkRegex = /\[\[(.*?)(?:\|(.*?))?\]\]/g;
     const foundLinks = [];
     let match;
     while ((match = wikiLinkRegex.exec(fileContent)) !== null) {
-      foundLinks.push(match[1].trim().toLowerCase());
+      foundLinks.push({ target: match[1].trim().toLowerCase(), label: match[2] ? match[2].trim() : null });
     }
 
     setEdges(currentEdges => {
       let newEdges = [...currentEdges];
       let edgesChanged = false;
 
-      foundLinks.forEach(cleanLink => {
-        // PERF FIX: Use nodesRef.current instead of nodes to prevent infinite rendering loops!
-        const targetNode = nodesRef.current.find(n => n.data.title.toLowerCase() === cleanLink || n.data.title.replace(/_/g, ' ').toLowerCase() === cleanLink);
-
+      foundLinks.forEach(linkInfo => {
+        const targetNode = nodesRef.current.find(n => n.data.title.toLowerCase() === linkInfo.target || n.data.title.replace(/_/g, ' ').toLowerCase() === linkInfo.target);
         if (targetNode) {
           const edgeId = `e-${selectedFile}-${targetNode.id}`;
-          if (!newEdges.some(e => e.id === edgeId)) {
+          const existingEdge = newEdges.find(e => e.id === edgeId);
+
+          if (!existingEdge) {
             newEdges.push({
-              id: edgeId, source: selectedFile, target: targetNode.id,
-              type: 'custom',
-              animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-              style: { stroke: "#3b82f6", strokeWidth: 2 },
-              data: { sourceNode: selectedFile, targetNode: targetNode.id, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
+              id: edgeId, source: selectedFile, target: targetNode.id, type: 'custom',
+              animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 },
+              data: { sourceNode: selectedFile, targetNode: targetNode.id, label: linkInfo.label, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
             });
             edgesChanged = true;
+          } else if (existingEdge.data.label !== linkInfo.label) {
+             existingEdge.data.label = linkInfo.label; // Update label dynamically!
+             edgesChanged = true;
           }
         }
       });
       return edgesChanged ? newEdges : currentEdges;
     });
-  // PERF FIX: Removed `nodes` and `handleDeleteEdge` from dependencies so it only runs when text changes!
   }, [fileContent, selectedFile]);
 
-  const saveStickyNote = async (nodeId, newText, newColor) => {
+  // FIX 6: SAVE WIDTH AND HEIGHT TO YAML
+  const saveStickyNote = async (nodeId, newText, newColor, w, h) => {
     try {
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
       const match = data.content.match(/^---\n([\s\S]*?)\n---/);
       if (match) {
         let yaml = match[1];
-        if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`);
-        else yaml += `\ncolor: "${newColor}"`;
+        if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`); else yaml += `\ncolor: "${newColor}"`;
+        if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: "${w}"`); else yaml += `\nwidth: "${w}"`;
+        if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: "${h}"`); else yaml += `\nheight: "${h}"`;
         const newContent = `---\n${yaml}\n---\n${newText}`;
         await fetch(getApiUrl(`/notes/${nodeId}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
       }
     } catch (err) { console.error("Failed to save sticky note", err); }
   };
 
-  const nodesWithCallbacks = nodes.map(n => ({
-    ...n,
-    data: { ...n.data, onUpdate: saveStickyNote }
-  }));
+  const nodesWithCallbacks = nodes.map(n => ({ ...n, data: { ...n.data, onUpdate: saveStickyNote, onQuickAdd: handleQuickAdd } }));
 
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
@@ -289,7 +314,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
             <p className="text-sm text-gray-400 -mt-2">Enter the name below.</p>
             <input autoFocus type="text" placeholder={modalConfig.type === 'starting_node' ? "e.g., Acme Corp Pentest" : "e.g., Nmap Quick Scan"} value={newNodeName} onChange={(e) => setNewNodeName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirmCreateNode()} className="bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500" />
             <div className="flex justify-end gap-3 mt-2">
-              <button onClick={() => setModalConfig({ isOpen: false, type: '', title: '' })} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Cancel</button>
+              <button onClick={() => setModalConfig({ isOpen: false, type: '', title: '', quickAddSource: null })} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Cancel</button>
               <button onClick={confirmCreateNode} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors">Create</button>
             </div>
           </div>
@@ -324,11 +349,15 @@ export default function CanvasView({ activeFile, setActiveFile }) {
             >
               <Background color="#30363d" gap={16} />
               <Controls className="bg-gray-800 border-gray-700 fill-white" />
-              <div className="absolute top-4 left-4 z-50 flex gap-2">
-                <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="bg-[#0ea5e9] text-white px-2 py-1 rounded-lg shadow-lg hover:bg-sky-400 transition flex items-center gap-1 text-sm font-bold">+ Target Scope</button>
-                <button onClick={() => openSpawnModal('action', 'Action Node')} className="bg-[#161b22] border border-gray-700 text-gray-300 px-2 py-1 rounded-lg shadow-lg hover:text-white transition flex items-center gap-1 text-sm font-bold">+ Action Node</button>
-                <button onClick={() => openSpawnModal('sticky_note', 'Sticky Note')} className="bg-[#fef08a] text-yellow-900 px-2 py-1 rounded-lg shadow-lg hover:bg-yellow-300 transition flex items-center gap-1 text-sm font-bold">+ Sticky Note</button>
+
+              {/* FIX 4: THE FLOATING TOOL PALETTE */}
+              <div className="absolute top-1/2 -translate-y-1/2 left-4 z-50 flex flex-col gap-2 bg-[#161b22] p-2 rounded-xl border border-gray-700 shadow-2xl">
+                <button onClick={() => openSpawnModal('starting_node', 'Target Scope')} className="text-gray-400 hover:text-[#0ea5e9] p-2 rounded-lg hover:bg-gray-800 transition-colors" title="Add Target Scope"><Target size={24} /></button>
+                <div className="h-px bg-gray-700 w-full"></div>
+                <button onClick={() => openSpawnModal('action', 'Action Node')} className="text-gray-400 hover:text-emerald-400 p-2 rounded-lg hover:bg-gray-800 transition-colors" title="Add Action Node"><Zap size={24} /></button>
+                <button onClick={() => openSpawnModal('sticky_note', 'Sticky Note')} className="text-gray-400 hover:text-[#fef08a] p-2 rounded-lg hover:bg-gray-800 transition-colors" title="Add Sticky Note"><StickyNote size={24} /></button>
               </div>
+
             </ReactFlow>
           </div>
 
@@ -340,6 +369,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
                   <h3 className="text-sm font-medium text-emerald-400 truncate pr-4">{selectedFile.split('/').pop()}</h3>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button onClick={() => onNodesDelete([{ id: selectedFile }])} title="Delete Node" className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-gray-800 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
                   <button title="Open in Main Tab" className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors"><ExternalLink className="w-4 h-4"/></button>
                   <button onClick={() => setSelectedFile(null)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"><X className="w-5 h-5"/></button>
                 </div>
@@ -350,18 +380,12 @@ export default function CanvasView({ activeFile, setActiveFile }) {
                   <span className="text-xs text-gray-500 font-bold">SETTINGS:</span>
                   {selectedNodeData.type === 'starting_node' && (
                     <select value={selectedNodeData.data.scope || 'Black Box'} onChange={(e) => updateNodeMetadata('scope', e.target.value)} className="bg-[#161b22] text-sky-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
-                      <option value="White Box">White Box</option>
-                      <option value="Black Box">Black Box</option>
-                      <option value="Adversary Simulation">Adversary Simulation</option>
+                      <option value="White Box">White Box</option><option value="Black Box">Black Box</option><option value="Adversary Simulation">Adversary Simulation</option>
                     </select>
                   )}
                   {selectedNodeData.type === 'action' && (
                     <select value={selectedNodeData.data.phase || 'Enumeration'} onChange={(e) => updateNodeMetadata('phase', e.target.value)} className="bg-[#161b22] text-emerald-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
-                      <option value="Reconnaissance">Reconnaissance</option>
-                      <option value="Enumeration">Enumeration</option>
-                      <option value="Exploitation">Exploitation</option>
-                      <option value="PostExploitation">PostExploitation</option>
-                      <option value="Reporting">Reporting</option>
+                      <option value="Reconnaissance">Reconnaissance</option><option value="Enumeration">Enumeration</option><option value="Exploitation">Exploitation</option><option value="PostExploitation">PostExploitation</option><option value="Reporting">Reporting</option>
                     </select>
                   )}
                   {selectedNodeData.type === 'sticky_note' && (
@@ -373,8 +397,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
                   )}
                 </div>
               )}
+              {/* FIX 1: HIDE THE YAML IN THE EDITOR! Pass displayContent instead of fileContent */}
               <div className="flex-1 overflow-y-auto px-6 py-4 hide-scroll bg-[#0d1117]">
-                <Editor content={fileContent} onChange={handleEditorChange} onLinkClick={() => {}} onTagClick={() => {}} />
+                <Editor content={displayContent} onChange={handleEditorChange} onLinkClick={() => {}} onTagClick={() => {}} />
               </div>
             </div>
           )}

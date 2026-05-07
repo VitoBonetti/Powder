@@ -38,6 +38,14 @@ export default function ActionNode({ id, data, selected }) {
         {/* Handles */}
         <Handle type="target" position={Position.Left} style={{ width: '6px', height: '6px', background: '#fff', border: '2px solid #94a3b8', left: '-4px' }} />
         <Handle type="source" position={Position.Right} style={{ width: '6px', height: '6px', background: '#fff', border: '2px solid #94a3b8', right: '-4px' }} />
+        {selected && (
+          <button
+            onClick={(e) => { e.stopPropagation(); data.onQuickAdd && data.onQuickAdd(id); }}
+            className="nodrag absolute -right-6 top-1/2 -translate-y-1/2 w-5 h-5 bg-blue-500 hover:bg-blue-400 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-md transition-transform hover:scale-110 z-50"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {/* YOUR EXACT TEXT DESIGN */}
