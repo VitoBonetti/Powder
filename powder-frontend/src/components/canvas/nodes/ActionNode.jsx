@@ -27,7 +27,7 @@ export default function ActionNode({ id, data, selected }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', width: '160px' }}>
       {/* YOUR EXACT BOX DESIGN */}
       <div style={{
-          width: '72px', height: '72px', backgroundColor: '#ffffff',
+          width: '36px', height: '36px', backgroundColor: '#ffffff',
           border: `2px solid ${selected ? '#000' : color}`, borderRadius: '14px',
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           boxShadow: selected ? `0 0 0 4px ${color}33` : '0 4px 6px -1px rgba(0,0,0,0.05)',
@@ -36,16 +36,16 @@ export default function ActionNode({ id, data, selected }) {
         {PhaseIcons[phase] || PhaseIcons.Enumeration}
 
         {/* Handles */}
-        <Handle type="target" position={Position.Left} style={{ width: '8px', height: '8px', background: '#fff', border: '2px solid #94a3b8', left: '-5px' }} />
-        <Handle type="source" position={Position.Right} style={{ width: '8px', height: '8px', background: '#fff', border: '2px solid #94a3b8', right: '-5px' }} />
+        <Handle type="target" position={Position.Left} style={{ width: '6px', height: '6px', background: '#fff', border: '2px solid #94a3b8', left: '-4px' }} />
+        <Handle type="source" position={Position.Right} style={{ width: '6px', height: '6px', background: '#fff', border: '2px solid #94a3b8', right: '-4px' }} />
       </div>
 
       {/* YOUR EXACT TEXT DESIGN */}
-      <div style={{ marginTop: '8px', textAlign: 'center' }}>
-        <div style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+      <div style={{ marginTop: '6px', textAlign: 'center' }}>
+        <div style={{ fontWeight: '700', fontSize: '11px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
           {data.title.replace('.md', '').replace(/_/g, ' ')}
         </div>
-        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>
+        <div style={{ fontSize: '9px', color: '#64748b', marginTop: '2px', textTransform: 'uppercase',  fontWeight: '600' }}>
           {phase}
         </div>
       </div>

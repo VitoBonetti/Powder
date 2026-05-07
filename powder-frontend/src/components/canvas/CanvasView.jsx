@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ReactFlow, Background, Controls, applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
+import { ReactFlow, Background, Controls, applyNodeChanges, applyEdgeChanges, addEdge, MarkerType } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { getApiUrl } from '../../config';
 import StickyNoteNode from './nodes/StickyNoteNode';
@@ -13,8 +13,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const [edges, setEdges] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
-
-  // FIX 1: UNIVERSAL MODAL STATE
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
   const [newNodeName, setNewNodeName] = useState("");
 
@@ -59,9 +57,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     return true;
   }, [nodes]);
 
-  // FIX 2: OPTIMISTIC EDITOR UPDATE ON CONNECT
+  // OPTIMISTIC EDITOR UPDATE ON CONNECT
   const onConnect = useCallback((params) => {
-    setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: "#3b82f6", strokeWidth: 2 } }, eds));
+    setEdges((eds) => addEdge({ ...params, animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 } }, eds));
 
     // Instantly write the WikiLink into the open text editor to prevent sync delays!
     if (selectedFile === params.source) {
@@ -182,7 +180,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         if (targetNode) {
           const edgeId = `e-${selectedFile}-${targetNode.id}`;
           if (!newEdges.some(e => e.id === edgeId)) {
-            newEdges.push({ id: edgeId, source: selectedFile, target: targetNode.id, animated: true, style: { stroke: "#3b82f6", strokeWidth: 2 } });
+            newEdges.push({ id: edgeId, source: selectedFile, target: targetNode.id, animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 } });
             edgesChanged = true;
           }
         }
@@ -190,6 +188,70 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       return edgesChanged ? newEdges : currentEdges;
     });
   }, [fileContent, selectedFile, nodes, setEdges]);
+
+  const onEdgesDelete = useCallback((edgesToDelete) => {
+    edgesToDelete.forEach(edge => {
+      // Find the source file
+      fetch(getApiUrl(`/notes/${edge.source}`), { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          // Find the target node's title
+          const targetNode = nodes.find(n => n.id === edge.target);
+          if (targetNode) {
+            const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
+            // Regex to remove the [[Link]] from the markdown
+            const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
+            const newContent = data.content.replace(linkRegex, '');
+
+            // Save the file without the link
+            fetch(getApiUrl(`/notes/${edge.source}`), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ content: newContent })
+            });
+          }
+        });
+    });
+  }, [nodes]);
+
+  const saveStickyNote = async (nodeId, newText, newColor) => {
+    try {
+      const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
+      const data = await res.json();
+
+      const match = data.content.match(/^---\n([\s\S]*?)\n---/);
+      if (match) {
+        let yaml = match[1];
+
+        // Update Color in YAML
+        if (/^color:.*$/m.test(yaml)) {
+          yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`);
+        } else {
+          yaml += `\ncolor: "${newColor}"`;
+        }
+
+        // Combine new YAML with new Text
+        const newContent = `---\n${yaml}\n---\n${newText}`;
+
+        // Save safely!
+        await fetch(getApiUrl(`/notes/${nodeId}`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ content: newContent })
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save sticky note", err);
+    }
+  };
+
+  // We map over the nodes to inject this save function into them!
+  const nodesWithCallbacks = nodes.map(n => ({
+    ...n,
+    data: { ...n.data, onUpdate: saveStickyNote }
+  }));
 
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
@@ -232,7 +294,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         <div className="flex-1 h-full flex">
           <div className="flex-1 h-full relative">
             <ReactFlow
-              nodes={nodes}
+              nodes={nodesWithCallbacks}
               edges={edges}
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
@@ -240,7 +302,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
               isValidConnection={isValidConnection}
-              onNodeClick={onNodeClick}
+              onNodeDoubleClick={onNodeClick}
+              onEdgesDelete={onEdgesDelete}
+              proOptions={{ hideAttribution: true }}
               fitView
               theme="dark"
             >

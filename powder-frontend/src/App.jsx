@@ -10,7 +10,7 @@ import GraphView from './components/GraphView';
 import CanvasView from './components/canvas/CanvasView';
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
-import { Eye, Edit3, Columns, Network, Map, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
+import { Eye, Edit3, Columns, Network, Map, CheckCircle2, Loader2, Search, AlertCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -24,6 +24,7 @@ function App() {
   const [searchInitialQuery, setSearchInitialQuery] = useState("");
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const editorViewRef = useRef(null);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   // Handle Global Commands dispatched from the Omnibar
   const handleGlobalCommand = async (commandId) => {
@@ -175,10 +176,28 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden font-sans">
-      <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
+
+      {!isSidebarHidden && (
+        <div className="w-64 border-r border-gray-800 bg-[#0d1117] flex-shrink-0 transition-all">
+          <Sidebar onFileSelect={openFileInTab} refreshTrigger={lastSaved} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
+        </div>
+      )}
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
+
+        {/* === NEW: THE FLOATING SIDEBAR TOGGLE BUTTON === */}
+        <button
+          onClick={() => setIsSidebarHidden(!isSidebarHidden)}
+          className="absolute top-2 left-2 z-[999] p-1.5 bg-[#161b22] border border-gray-700 rounded-md text-gray-400 hover:text-white shadow-lg transition-colors flex items-center justify-center"
+          title={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar"}
+        >
+          {isSidebarHidden ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+        </button>
+
+        {/* Dynamic margin added to TabBar so the floating button doesn't cover your first tab! */}
+        <div className={isSidebarHidden ? "ml-10" : "ml-10"}>
+          <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
+        </div>
 
         {/* Floating View Mode Toolbar */}
         {activeFile && !isImageFile && (
