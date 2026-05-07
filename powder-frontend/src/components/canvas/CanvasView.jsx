@@ -15,10 +15,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
 
-  // MODALS
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
   const [newNodeName, setNewNodeName] = useState("");
-  // NEW: BEAUTIFUL LABEL MODAL
   const [labelModal, setLabelModal] = useState({ isOpen: false, edgeId: null, source: null, target: null, currentLabel: '' });
 
   const nodeTypes = useMemo(() => ({ sticky_note: StickyNoteNode, action: ActionNode, starting_node: StartingNode }), []);
@@ -36,7 +34,14 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const selectedFileRef = useRef(selectedFile);
   useEffect(() => { selectedFileRef.current = selectedFile; }, [selectedFile]);
 
+  // FIX 1: INSTANT DELETE SYNC
   const onNodesDelete = useCallback((nodesToDelete) => {
+    const ids = nodesToDelete.map(n => n.id);
+
+    // Instantly wipe them from the screen so you don't need to refresh!
+    setNodes(nds => nds.filter(n => !ids.includes(n.id)));
+    setEdges(eds => eds.filter(e => !ids.includes(e.source) && !ids.includes(e.target)));
+
     nodesToDelete.forEach(node => {
       fetch(getApiUrl(`/notes/${node.id}`), { method: 'DELETE', credentials: 'include' }).catch(err => console.error("Failed to delete file:", err));
       if (selectedFileRef.current === node.id) setSelectedFile(null);
@@ -66,20 +71,24 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     setEdges(eds => eds.filter(e => e.id !== edgeId));
   }, []);
 
-  // OPENS THE BEAUTIFUL LABEL MODAL
   const handleLabelEdge = useCallback((edgeId, source, target, currentLabel) => {
     setLabelModal({ isOpen: true, edgeId, source, target, currentLabel: currentLabel || "" });
   }, []);
 
-  // SAVES THE LABEL FROM THE MODAL
+  // FIX 2: INSTANT LABEL SYNC
   const confirmLabelEdge = () => {
-    const { source, target, currentLabel } = labelModal;
+    const { source, target, currentLabel, edgeId } = labelModal;
+    const cleanLabel = currentLabel.trim();
+
+    // Instantly show the label on the UI line!
+    setEdges(eds => eds.map(e => e.id === edgeId ? { ...e, data: { ...e.data, label: cleanLabel || null } } : e));
+
     const targetNode = nodesRef.current.find(n => n.id === target);
     if (!targetNode) return;
     const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
 
-    const oldLinkRegex = new RegExp(`\\[\\[${title}(?:\\|.*?)?\\]\\]`, 'gi');
-    const newLink = labelModal.currentLabel.trim() === "" ? `[[${title}]]` : `[[${title}|${labelModal.currentLabel.trim()}]]`;
+    const oldLinkRegex = new RegExp(`\\[\\[${title}(?:\\|[^\\]]*)?\\]\\]`, 'gi');
+    const newLink = cleanLabel === "" ? `[[${title}]]` : `[[${title}|${cleanLabel}]]`;
     const rewriteFile = (text) => text.replace(oldLinkRegex, newLink);
 
     if (selectedFileRef.current === source) {
@@ -94,7 +103,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         .then(data => fetch(getApiUrl(`/notes/${source}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: rewriteFile(data.content) }) }));
     }
     setLabelModal({ isOpen: false, edgeId: null, source: null, target: null, currentLabel: '' });
-    setTimeout(() => fetchCanvasData(), 200); // Tiny delay to let backend save before fetch
   };
 
   const fetchCanvasData = useCallback(() => {
@@ -102,7 +110,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     fetch(getApiUrl(`/canvas/data?folder=${encodeURIComponent(currentFolder)}`), { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
-        // FIX: Inject explicit width/height into React Flow style object for sticky notes!
         const formattedNodes = data.nodes.map(n => {
           if (n.type === 'sticky_note') {
             const widthMatch = n.data.note.match(/^width:.*"(\d+)".*$/m);
@@ -139,12 +146,14 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   }, []);
 
   const isValidConnection = useCallback((connection) => {
+    if (connection.source === connection.target) return false; // Prevent connecting to itself!
     const targetNode = nodes.find(n => n.id === connection.target);
     if (targetNode && targetNode.type === 'starting_node') return false;
     return true;
   }, [nodes]);
 
   const onConnect = useCallback((params) => {
+    if (params.source === params.target) return; // FIX: Block accidental self-connections
     setEdges((eds) => addEdge({
       ...params, type: 'custom', animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }, style: { stroke: "#3b82f6", strokeWidth: 2 },
       data: { sourceNode: params.source, targetNode: params.target, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
@@ -171,7 +180,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const handleEditorChange = (newTextWithoutYaml) => {
     const match = fileContent.match(/^---\n([\s\S]*?)\n---\n*/);
     const yaml = match ? match[0] : '';
-    const fullNewContent = yaml + newTextWithoutYaml;
+    // Double newline prevents H1 markdown bug!
+    const fullNewContent = yaml ? `${yaml}\n\n${newTextWithoutYaml}` : newTextWithoutYaml;
     setFileContent(fullNewContent);
     fetch(getApiUrl(`/notes/${selectedFile}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: fullNewContent }) });
   };
@@ -200,7 +210,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     if (nodeType === 'starting_node') frontmatter += `scope: "Black Box"\n`;
     if (nodeType === 'action') frontmatter += `phase: "Reconnaissance"\n`;
     if (nodeType === 'sticky_note') frontmatter += `color: "#fef08a"\n`;
-    frontmatter += `---\n# ${newNodeName.trim()}\n`;
+    // Double newline prevents H1 markdown bug!
+    frontmatter += `---\n\n# ${newNodeName.trim()}\n`;
 
     fetch(getApiUrl(`/notes/${targetPath}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: frontmatter }) }).then(() => {
       if (modalConfig.quickAddSource) fetch(getApiUrl('/canvas/edge'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source: modalConfig.quickAddSource.id, target: targetPath }) });
@@ -225,7 +236,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         let yaml = match[1];
         const keyRegex = new RegExp(`^${key}:.*$`, 'm');
         if (keyRegex.test(yaml)) yaml = yaml.replace(keyRegex, `${key}: "${value}"`); else yaml += `\n${key}: "${value}"`;
-        const newContent = prev.replace(yamlRegex, `---\n${yaml}\n---`);
+        // Double newline prevents H1 markdown bug!
+        const newContent = prev.replace(yamlRegex, `---\n${yaml}\n---\n\n`);
         fetch(getApiUrl(`/notes/${selectedFile}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
         return newContent;
       }
@@ -269,9 +281,14 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     });
   }, [fileContent, selectedFile, handleDeleteEdge, handleLabelEdge]);
 
-  // FIX: SAVE DIMENSIONS TO YAML WHEN RESIZING
+  // FIX 3: INSTANT SIZING SYNC
   const saveStickyNote = async (nodeId, newText, newColor, w, h) => {
     try {
+      // Instantly update UI so the size sticks when you drag!
+      if (w !== undefined && h !== undefined) {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, style: { ...n.style, width: w, height: h } } : n));
+      }
+
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
       const match = data.content.match(/^---\n([\s\S]*?)\n---/);
@@ -282,7 +299,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
            if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: "${w}"`); else yaml += `\nwidth: "${w}"`;
            if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: "${h}"`); else yaml += `\nheight: "${h}"`;
         }
-        const newContent = `---\n${yaml}\n---\n${newText}`;
+        // Double newline prevents H1 markdown bug!
+        const newContent = `---\n${yaml}\n---\n\n${newText}`;
         await fetch(getApiUrl(`/notes/${nodeId}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
       }
     } catch (err) { console.error("Failed to save sticky note", err); }
@@ -293,7 +311,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   return (
     <div className="w-full h-full relative flex bg-[#010409] rounded-xl overflow-hidden border border-gray-800">
 
-      {/* NODE CREATION MODAL */}
       {modalConfig.isOpen && (
         <div className="absolute inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-[#161b22] border border-gray-700 p-6 rounded-xl shadow-2xl w-96 flex flex-col gap-4">
@@ -308,7 +325,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         </div>
       )}
 
-      {/* NEW: LABEL CREATION MODAL */}
       {labelModal.isOpen && (
         <div className="absolute inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-[#161b22] border border-gray-700 p-6 rounded-xl shadow-2xl w-96 flex flex-col gap-4">
@@ -345,6 +361,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onNodeDoubleClick={onNodeClick}
+              connectOnClick={false} // FIX: Disable accidental clicks connecting nodes!
               proOptions={{ hideAttribution: true }}
               fitView
               theme="dark"
