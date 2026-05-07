@@ -673,14 +673,22 @@ def get_canvas_data(target_folder: str = None) -> dict:
                 # Extract WikiLinks and convert them to React Flow Edges!
                 wiki_links = set(re.findall(r'\[\[(.*?)\]\]', post.content))
                 for wl in wiki_links:
-                    target_key = wl.lower().split('/')[-1]
+                    # NEW: Split the target and the label if it exists (e.g., Target|Label)
+                    parts = wl.split('|')
+                    target_key = parts[0].strip().lower().split('/')[-1]
+                    label = parts[1].strip() if len(parts) > 1 else None
+
                     target_path = file_map.get(target_key)
                     if target_path:
-                        edges.append({
+                        edge_data = {
                             "id": f"e-{rel_path}-{target_path}",
                             "source": rel_path,
-                            "target": target_path,
-                        })
+                            "target": target_path
+                        }
+                        if label:
+                            edge_data["label"] = label  # Send the label to the frontend!
+
+                        edges.append(edge_data)
         except Exception as e:
             # If a file is malformed, just skip it
             continue
