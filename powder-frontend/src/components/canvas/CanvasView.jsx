@@ -191,29 +191,42 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   const onEdgesDelete = useCallback((edgesToDelete) => {
     edgesToDelete.forEach(edge => {
-      // Find the source file
-      fetch(getApiUrl(`/notes/${edge.source}`), { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-          // Find the target node's title
-          const targetNode = nodes.find(n => n.id === edge.target);
-          if (targetNode) {
-            const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
-            // Regex to remove the [[Link]] from the markdown
-            const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
-            const newContent = data.content.replace(linkRegex, '');
+      const targetNode = nodes.find(n => n.id === edge.target);
+      if (targetNode) {
+        const title = targetNode.data.title.replace('.md', '').replace(/_/g, ' ');
+        const linkRegex = new RegExp(`\\[\\[${title}\\]\\]\\n?`, 'gi');
 
-            // Save the file without the link
+        // If the file we are deleting the edge from is currently OPEN in the drawer,
+        // we MUST update the text editor instantly, or the Phase 7 hook will resurrect the edge!
+        if (selectedFile === edge.source) {
+          setFileContent(prev => {
+            const updatedText = prev.replace(linkRegex, '');
+            // Send the patched text to the backend
             fetch(getApiUrl(`/notes/${edge.source}`), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ content: newContent })
+              body: JSON.stringify({ content: updatedText })
             });
-          }
-        });
+            return updatedText;
+          });
+        } else {
+          // If the file is NOT open in the editor, just modify it in the background normally
+          fetch(getApiUrl(`/notes/${edge.source}`), { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+              const newContent = data.content.replace(linkRegex, '');
+              fetch(getApiUrl(`/notes/${edge.source}`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ content: newContent })
+              });
+            });
+        }
+      }
     });
-  }, [nodes]);
+  }, [nodes, selectedFile]);
 
   const saveStickyNote = async (nodeId, newText, newColor) => {
     try {
