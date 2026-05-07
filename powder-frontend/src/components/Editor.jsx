@@ -10,10 +10,10 @@ import { autocompletion } from '@codemirror/autocomplete';
 import { BACKEND_URL, getApiUrl } from '../config';
 
 const customMarkdownStyle = HighlightStyle.define([
-  { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#60a5fa" },
-  { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#93c5fd" },
-  { tag: t.heading3, fontSize: "1.5em", fontWeight: "bold", color: "#e2e8f0" },
-  { tag: t.heading4, fontSize: "1.2em", fontWeight: "bold", color: "#e2e8f0" },
+  { tag: t.heading1, fontSize: "2.0em", fontWeight: "bold", color: "#60a5fa" },
+  { tag: t.heading2, fontSize: "1.5em", fontWeight: "bold", color: "#93c5fd" },
+  { tag: t.heading3, fontSize: "1.2em", fontWeight: "bold", color: "#e2e8f0" },
+  { tag: t.heading4, fontSize: "0.8em", fontWeight: "bold", color: "#e2e8f0" },
   { tag: t.strong, fontWeight: "bold", color: "#ffffff" },
   { tag: t.emphasis, fontStyle: "italic", color: "#cbd5e1" },
   { tag: t.strikethrough, textDecoration: "line-through" },
