@@ -161,7 +161,48 @@ export default function CanvasView({ activeFile }) {
   // 2. Safely find the data for the currently open file to drive the Drawer UI
   const selectedNodeData = selectedFile ? nodes.find(n => n.id === selectedFile) : null;
 
-  // --- PHASE 6 ADDITIONS END HERE ---
+  // Listen to the text editor. If the user types a [[WikiLink]], instantly draw the edge!
+  useEffect(() => {
+    if (!selectedFile || !fileContent) return;
+
+    // 1. Find all [[WikiLinks]] in the current text editor using Regex
+    const wikiLinkRegex = /\[\[(.*?)\]\]/g;
+    const foundLinks = [];
+    let match;
+    while ((match = wikiLinkRegex.exec(fileContent)) !== null) {
+      foundLinks.push(match[1]); // match[1] is the text inside the brackets
+    }
+
+    setEdges(currentEdges => {
+      let newEdges = [...currentEdges];
+      let edgesChanged = false;
+
+      // 2. For every link found in the text...
+      foundLinks.forEach(linkTitle => {
+        // Find the actual node ID (file path) that matches this title
+        const targetNode = nodes.find(n => n.data.title === linkTitle || n.data.title.replace(/_/g, ' ') === linkTitle);
+
+        if (targetNode) {
+          const edgeId = `e-${selectedFile}-${targetNode.id}`;
+
+          // 3. If the edge doesn't exist on the canvas yet, draw it!
+          if (!newEdges.some(e => e.id === edgeId)) {
+            newEdges.push({
+              id: edgeId,
+              source: selectedFile,
+              target: targetNode.id,
+              animated: true,
+              style: { stroke: "#3b82f6", strokeWidth: 2 }
+            });
+            edgesChanged = true;
+          }
+        }
+      });
+
+      // Only update state if we actually drew a new edge to prevent infinite loops
+      return edgesChanged ? newEdges : currentEdges;
+    });
+  }, [fileContent, selectedFile, nodes, setEdges]);
 
 
   if (!currentFolder) {
@@ -224,12 +265,10 @@ export default function CanvasView({ activeFile }) {
               <span className="text-xs text-gray-500 font-bold">SETTINGS:</span>
 
               {selectedNodeData.type === 'starting_node' && (
-                <select value={selectedNodeData.data.scope || 'Internal Network'} onChange={(e) => updateNodeMetadata('scope', e.target.value)} className="bg-[#161b22] text-sky-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
+                <select value={selectedNodeData.data.scope || 'White Box'} onChange={(e) => updateNodeMetadata('scope', e.target.value)} className="bg-[#161b22] text-sky-400 text-xs px-2 py-1.5 rounded border border-gray-700 outline-none cursor-pointer hover:border-gray-500 transition-colors">
                   <option value="White Box">White Box</option>
                   <option value="Black Box">Black Box</option>
                   <option value="Adversary Simulation">Adversary Simulation</option>
-                  <option value="Internal Network">Internal Network</option>
-                  <option value="Web Application">Web Application</option>
                 </select>
               )}
 
