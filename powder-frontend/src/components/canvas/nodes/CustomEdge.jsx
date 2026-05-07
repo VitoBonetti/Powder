@@ -10,7 +10,7 @@ export default function CustomEdge({
   return (
     <>
       {/* interactionWidth=20 makes the line 20x easier to click without hitting the nodes! */}
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} interactionWidth={20} />
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
       <EdgeLabelRenderer>
         <div

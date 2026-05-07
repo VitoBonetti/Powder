@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ReactFlow, Background, Controls, applyNodeChanges, applyEdgeChanges, addEdge, MarkerType } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { getApiUrl } from '../../config';
@@ -32,6 +32,24 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     if (parts.length >= 3) return `${parts[0]}/${parts[1]}`;
     return null;
   }, [activeFile]);
+
+  // PERFORMANCE FIX: Keep a quiet reference to nodes so Phase 7 doesn't trigger 60x a second!
+  const nodesRef = useRef(nodes);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+  // NEW: DELETE NODES OFFICIALLY
+  const onNodesDelete = useCallback((nodesToDelete) => {
+    nodesToDelete.forEach(node => {
+      // 1. Tell the backend to delete the physical markdown file
+      fetch(getApiUrl(`/notes/${node.id}`), {
+        method: 'DELETE',
+        credentials: 'include'
+      }).catch(err => console.error("Failed to delete file:", err));
+
+      // 2. If the drawer is open for this node, close it!
+      if (selectedFile === node.id) setSelectedFile(null);
+    });
+  }, [selectedFile]);
 
   // <-- NEW DELETE LOGIC FOR THE TRASH CAN BUTTON
   const handleDeleteEdge = useCallback((edgeId, source, target) => {
@@ -211,6 +229,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
 
   useEffect(() => {
     if (!selectedFile || !fileContent) return;
+
     const wikiLinkRegex = /\[\[(.*?)\]\]/g;
     const foundLinks = [];
     let match;
@@ -221,14 +240,17 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     setEdges(currentEdges => {
       let newEdges = [...currentEdges];
       let edgesChanged = false;
+
       foundLinks.forEach(cleanLink => {
-        const targetNode = nodes.find(n => n.data.title.toLowerCase() === cleanLink || n.data.title.replace(/_/g, ' ').toLowerCase() === cleanLink);
+        // PERF FIX: Use nodesRef.current instead of nodes to prevent infinite rendering loops!
+        const targetNode = nodesRef.current.find(n => n.data.title.toLowerCase() === cleanLink || n.data.title.replace(/_/g, ' ').toLowerCase() === cleanLink);
+
         if (targetNode) {
           const edgeId = `e-${selectedFile}-${targetNode.id}`;
           if (!newEdges.some(e => e.id === edgeId)) {
             newEdges.push({
               id: edgeId, source: selectedFile, target: targetNode.id,
-              type: 'custom', // <-- Use our edge
+              type: 'custom',
               animated: false, markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
               style: { stroke: "#3b82f6", strokeWidth: 2 },
               data: { sourceNode: selectedFile, targetNode: targetNode.id, onDelete: handleDeleteEdge, onLabel: handleLabelEdge }
@@ -239,7 +261,8 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       });
       return edgesChanged ? newEdges : currentEdges;
     });
-  }, [fileContent, selectedFile, nodes, setEdges, handleDeleteEdge]);
+  // PERF FIX: Removed `nodes` and `handleDeleteEdge` from dependencies so it only runs when text changes!
+  }, [fileContent, selectedFile]);
 
   const saveStickyNote = async (nodeId, newText, newColor) => {
     try {
@@ -291,10 +314,11 @@ export default function CanvasView({ activeFile, setActiveFile }) {
               nodes={nodesWithCallbacks}
               edges={edges}
               nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes} // <-- ADDED CUSTOM EDGES HERE
+              edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeDragStop={onNodeDragStop}
+              onNodesDelete={onNodesDelete}
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onNodeDoubleClick={onNodeClick}
