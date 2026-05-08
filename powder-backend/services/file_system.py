@@ -549,9 +549,12 @@ def build_knowledge_graph() -> dict:
         for row in rows:
             path = row["path"]
 
-            # 1. NEW: Skip the _Templates folder entirely
+            # Skip the _Templates folder entirely
             if path.startswith("_Templates/") or "/_Templates/" in path:
                 continue
+            if path.startswith("_Flows/") or "/_Flows/" in path:
+                continue
+
 
             name = path.split("/")[-1].replace(".md", "")
 
