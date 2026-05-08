@@ -272,17 +272,64 @@ async def create_flow_node(request: Request, user: str = Depends(verify_access))
 async def update_flow_node(node_id: str, request: Request, user: str = Depends(verify_access)):
     node = await request.json()
     conn = get_db()
+    conn.row_factory = sqlite3.Row
+
+    # 1. Fetch the current node state
+    cursor = conn.execute("SELECT title, file_path FROM flow_nodes WHERE id=?", (node_id,))
+    current_node = cursor.fetchone()
+    if not current_node:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    current_title = current_node["title"]
+    file_path = current_node["file_path"]
+    new_title = node.get("title", current_title)
+
+    # --- BUG 1 FIX: Handle File Renaming ---
+    if new_title != current_title:
+        safe_title = re.sub(r'[^\w\s-]', '', new_title).strip().replace(' ', '_')
+        new_filename = f"{safe_title}_{node_id[:8]}.md"
+        try:
+            # This physically renames the file and updates Powder's global search index
+            file_path = file_system.rename_item(file_path, new_filename)
+        except Exception as e:
+            print(f"Rename failed: {e}")
+
+    # --- BUG 4 FIX: Reconstruct and Save the Markdown Content ---
+    node_type = node.get("type", "actionNode")
+    status = node.get("status", "action")
+    command = node.get("command", "")
+    markdown_result = node.get("markdown_result", "")
+    note_text = node.get("note", "")  # Used by sticky notes
+
+    # Build the Frontmatter and Title
+    content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {new_title}\n\n"
+
+    if node_type == "stickyNote":
+        content += note_text
+    else:
+        if command:
+            content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
+        content += f"## Notes & Evidence\n{markdown_result}"
+
+    # Write the actual file to the Vault
+    file_system.save_note_content(file_path, content)
+
+    # 3. Update the Pointer Database
     conn.execute("""
         UPDATE flow_nodes 
-        SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?
+        SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=?
         WHERE id=?
     """, (
-        node.get("title"), node.get("type"), node.get("command"), node.get("status"),
+        new_title, node_type, command, status,
         node.get("position_x"), node.get("position_y"), json.dumps(node.get("meta_tags", {})),
-        node_id
+        file_path, node_id
     ))
     conn.commit()
     conn.close()
+
+    # Return the updated file_path so the frontend knows the new location
+    node["file_path"] = file_path
     return node
 
 
