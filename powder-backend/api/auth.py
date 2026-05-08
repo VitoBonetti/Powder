@@ -98,7 +98,7 @@ async def github_callback(code: str, response: Response):
         key="powder_session",
         value=encoded_jwt,
         httponly=True,  # JS cannot read this! (Protects against XSS)
-        secure=False,  # Set to True later when using HTTPS/Cloudflare
+        secure=True,  # Set to True later when using HTTPS/Cloudflare
         samesite="lax",  # Prevents CSRF attacks
         max_age=7 * 24 * 60 * 60
     )

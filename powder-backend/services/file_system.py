@@ -5,6 +5,7 @@ import base64
 import shutil
 import time
 import re
+import json
 import sqlite3
 from datetime import datetime
 import urllib.request
@@ -90,7 +91,7 @@ def get_file_tree(current_dir: Path = VAULT_DIR, base_dir: Path = VAULT_DIR) -> 
     if isinstance(current_dir, str):
         current_dir = Path(current_dir)
 
-    rel_path = "" if current_dir == VAULT_DIR else str(current_dir.relative_to(VAULT_DIR)).replace("\\", "/")
+    rel_path = "" if current_dir == VAULT_DIR else current_dir.relative_to(VAULT_DIR).as_posix()
 
     """Recursively builds a tree structure of the vault."""
     tree = {
@@ -448,7 +449,7 @@ def harvest_external_images(content: str, source_url: str) -> str:
     return content
 
 
-def save_to_inbox_async(title: str, content: str, source: str, background_tasks: BackgroundTasks) -> str:
+def save_to_inbox_async(title: str, content: str, source: str) -> str:
     inbox_dir = VAULT_DIR / "_Inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
 
@@ -461,8 +462,21 @@ def save_to_inbox_async(title: str, content: str, source: str, background_tasks:
     header = f"---\nclipped: {datetime.now()}\nsource: {source}\n---\n\n# {title}\n\n"
     file_path.write_text(header + content, encoding="utf-8")
 
-    # 2. Schedule heavy I/O in the background
-    background_tasks.add_task(process_inbox_background, file_path, rel_path, content, source)
+    # 2. Persist the background task to SQLite
+    payload = json.dumps({
+        "file_path": str(file_path),
+        "rel_path": rel_path,
+        "content": content,
+        "source": source
+    })
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO background_jobs (task_type, payload) VALUES (?, ?)",
+        ("process_inbox", payload)
+    )
+    conn.commit()
+    conn.close()
 
     return rel_path
 

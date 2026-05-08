@@ -7,6 +7,7 @@ from services import file_system
 from services.file_system import VAULT_DIR
 from api.auth import verify_access
 import os
+import asyncio
 from database import sync_search_index
 
 
@@ -41,9 +42,17 @@ def get_note(file_path: str, user: str = Depends(verify_access)):
 
 
 @router.post("/notes/{file_path:path}")
-def save_note(file_path: str, note: NoteData, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
-    final_path = file_system.save_note_content(file_path, note.content)
-    return {"message": f"Note '{final_path}' saved successfully."}
+async def save_note(file_path: str, note: NoteData, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Note: save_note_content is synchronous, so we run it in a thread pool to not block the event loop
+            final_path = await asyncio.to_thread(file_system.save_note_content, file_path, note.content)
+            return {"message": f"Note '{final_path}' saved successfully."}
+        except PermissionError as e:
+            if attempt == max_retries - 1:
+                raise HTTPException(status_code=503, detail="File is currently locked. Try saving again in a moment.")
+            await asyncio.sleep(0.5 * (2 ** attempt))
 
 
 @router.get("/tree")
@@ -138,11 +147,11 @@ def resolve_link(target: str, user: str = Depends(verify_access)):
 
 
 @router.post("/inbox")
-def add_to_inbox(item: InboxItem, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
+def add_to_inbox(item: InboxItem,  user: str = Depends(verify_access)):
     """The Universal Inbox receiver. Push data here from anywhere."""
     try:
         # Refactor save_to_inbox to return early and harvest images in background
-        path = file_system.save_to_inbox_async(item.title, item.content, item.source, background_tasks)
+        path = file_system.save_to_inbox_async(item.title, item.content, item.source)
         return {"message": "Successfully ingested into Inbox", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

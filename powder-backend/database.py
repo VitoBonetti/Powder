@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 import re
+import json
 
 DB_PATH = Path("vault_security.db")
 
@@ -35,6 +36,19 @@ def init_db():
            UNIQUE (path, tag)
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS background_jobs
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            status TEXT DEFAULT 'PENDING',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.execute("UPDATE background_jobs SET status = 'PENDING' WHERE status = 'PROCESSING'")
 
     conn.commit()
     conn.close()
