@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks, Request
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
@@ -6,12 +6,15 @@ from models.schemas import NoteData, MoveData, InboxItem, RenameNote, NodeCreate
 from services import file_system
 from services.file_system import VAULT_DIR
 from api.auth import verify_access
+from parser import route_and_parse
 import os
 import asyncio
 from database import sync_search_index, get_db
 import uuid
 import json
 import re
+import sqlite3
+import shutil
 
 
 load_dotenv()
@@ -206,58 +209,175 @@ def get_knowledge_graph(user: str = Depends(verify_access)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/flow/nodes")
+def get_flow_nodes(user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    nodes = [dict(row) for row in conn.execute("SELECT * FROM flow_nodes").fetchall()]
+    conn.close()
+
+    # SQLite stores JSON as strings, React Flow needs it as an object
+    for n in nodes:
+        n["meta_tags"] = json.loads(n["meta_tags"]) if n["meta_tags"] else {}
+    return nodes
+
+
+@router.get("/flow/edges")
+def get_flow_edges(user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    edges = [dict(row) for row in conn.execute("SELECT * FROM flow_edges").fetchall()]
+    conn.close()
+    return edges
+
+
 @router.post("/flow/nodes")
-def create_flow_node(node: NodeCreate, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
+async def create_flow_node(request: Request, user: str = Depends(verify_access)):
+    node = await request.json()
     node_id = str(uuid.uuid4())
 
-    # 1. Create the dedicated Markdown file in Powder's Vault
-    safe_title = re.sub(r'[^\w\s-]', '', node.title).strip().replace(' ', '_')
+    # 1. THE BRIDGE: Create the dedicated Markdown file in Powder's Vault
+    safe_title = re.sub(r'[^\w\s-]', '', node.get("title", "Node")).strip().replace(' ', '_')
     file_path = f"_Flows/{safe_title}_{node_id[:8]}.md"
 
-    # Pre-populate the note with the Pentest command
-    initial_content = f"---\ntype: flow-node\nstatus: {node.status}\n---\n\n# {node.title}\n\n"
-    if node.command:
-        initial_content += f"**Command:**\n```bash\n{node.command}\n```\n\n---\n\n## Notes\n"
+    # Pre-populate the note with data
+    command = node.get("command", "")
+    status = node.get("status", "action")
+    initial_content = f"---\ntype: flow-node\nstatus: {status}\n---\n\n# {node.get('title', 'Node')}\n\n"
+    if command:
+        initial_content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n## Notes\n"
 
     file_system.save_note_content(file_path, initial_content)
 
-    # 2. Save the graph node to SQLite (The Pointer)
+    meta_tags = node.get("meta_tags", {})
+
+    # 2. THE POINTER: Save the graph node to SQLite
     conn = get_db()
     conn.execute("""
-                 INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 """, (
-                     node_id, node.title, node.type, node.command, node.status,
-                     node.position_x, node.position_y, file_path, json.dumps(node.meta_tags or {})
-                 ))
+        INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        node_id, node.get("title"), node.get("type"), command, status,
+        node.get("position_x", 0), node.get("position_y", 0), file_path, json.dumps(meta_tags)
+    ))
     conn.commit()
     conn.close()
 
-    return {"id": node_id, "file_path": file_path, "status": "success"}
+    node["id"] = node_id
+    node["file_path"] = file_path
+    return node
 
 
-@router.get("/flow/graph")
-def get_flow_graph(user: str = Depends(verify_access)):
-    """Returns the graph for React Flow to render."""
+@router.put("/flow/nodes/{node_id}")
+async def update_flow_node(node_id: str, request: Request, user: str = Depends(verify_access)):
+    node = await request.json()
     conn = get_db()
-    nodes = [dict(row) for row in conn.execute("SELECT * FROM flow_nodes").fetchall()]
-    edges = [dict(row) for row in conn.execute("SELECT * FROM flow_edges").fetchall()]
+    conn.execute("""
+        UPDATE flow_nodes 
+        SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?
+        WHERE id=?
+    """, (
+        node.get("title"), node.get("type"), node.get("command"), node.get("status"),
+        node.get("position_x"), node.get("position_y"), json.dumps(node.get("meta_tags", {})),
+        node_id
+    ))
+    conn.commit()
     conn.close()
+    return node
 
-    # Format for React Flow
-    rf_nodes = [
-        {
-            "id": n["id"],
-            "type": n["type"],
-            "position": {"x": n["position_x"], "y": n["position_y"]},
-            "data": {
-                "title": n["title"],
-                "command": n["command"],
-                "status": n["status"],
-                "file_path": n["file_path"],  # The crucial pointer
-                "meta_tags": json.loads(n["meta_tags"] or "{}")
-            }
+
+@router.delete("/flow/nodes/{node_id}")
+def delete_flow_node(node_id: str, user: str = Depends(verify_access)):
+    conn = get_db()
+
+    # First, get the file_path to delete the markdown file from the Vault
+    cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (node_id,))
+    row = cursor.fetchone()
+    if row and row[0]:
+        try:
+            file_system.delete_item(row[0])
+        except Exception:
+            pass  # File might already be gone
+
+    conn.execute("DELETE FROM flow_nodes WHERE id=?", (node_id,))
+    conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (node_id, node_id))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted"}
+
+
+@router.post("/flow/edges")
+async def create_flow_edge(request: Request, user: str = Depends(verify_access)):
+    edge = await request.json()
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO flow_edges (id, source, target, label) 
+        VALUES (?, ?, ?, ?)
+    """, (edge["id"], edge["source"], edge["target"], edge.get("label", "")))
+    conn.commit()
+    conn.close()
+    return edge
+
+
+@router.put("/flow/edges/{edge_id}")
+async def update_flow_edge(edge_id: str, request: Request, user: str = Depends(verify_access)):
+    edge = await request.json()
+    conn = get_db()
+    conn.execute("UPDATE flow_edges SET label=? WHERE id=?", (edge.get("label", ""), edge_id))
+    conn.commit()
+    conn.close()
+    return edge
+
+
+@router.delete("/flow/edges/{edge_id}")
+def delete_flow_edge(edge_id: str, user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.execute("DELETE FROM flow_edges WHERE id=?", (edge_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted"}
+
+
+# --- File and Image Uploads within the Drawer ---
+@router.post("/flow/upload/")
+async def upload_flow_image(file: UploadFile = File(...), user: str = Depends(verify_access)):
+
+    assets_dir = VAULT_DIR / "assets"
+    assets_dir.mkdir(exist_ok=True)
+
+    file_path = assets_dir / file.filename
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"url": f"/assets/{file.filename}"}
+
+
+@router.post("/flow/nodes/{node_id}/parse")
+async def parse_scan_file(node_id: str, file: UploadFile = File(...), user: str = Depends(verify_access)):
+    try:
+        # 1. Read bytes and safely decode to string (Your parsers expect a string)
+        raw_content = await file.read()
+        try:
+            content_str = raw_content.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="File must be a valid UTF-8 encoded text/xml/json file.")
+
+        # 2. Execute your exact PentestFlow parser logic (returns a dict)
+        parsed_data = route_and_parse(content_str)
+
+        # 3. Format the dictionary exactly as ResultDrawer.jsx expects it
+        return {
+            "markdown_result": parsed_data.get("markdown", parsed_data.get("markdown_result", "")),
+            "title": parsed_data.get("title", "Parsed Scan"),
+            "command": parsed_data.get("command", "")
         }
-        for n in nodes
-    ]
-    return {"nodes": rf_nodes, "edges": edges}
+
+    except ImportError:
+        raise HTTPException(status_code=501,
+                            detail="Parser folder not found. Please copy the 'parser' folder from PentestFlow into powder-backend.")
+    except ValueError as ve:
+        # This catches the exact "Unrecognized tool format" error from your __init__.py
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Parsing error: {str(e)}")
+
