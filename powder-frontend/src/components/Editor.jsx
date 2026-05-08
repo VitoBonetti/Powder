@@ -29,6 +29,17 @@ const customMarkdownStyleLight = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
 ]);
 
+// Explicitly forces the base text color to override any global white text bleeding in
+const editorThemeLight = EditorView.theme({
+  "&": { color: "#334155 !important", backgroundColor: "transparent" },
+  ".cm-content": { caretColor: "#0ea5e9" },
+}, { dark: false });
+
+const editorThemeDark = EditorView.theme({
+  "&": { color: "#c9d1d9 !important", backgroundColor: "transparent" },
+  ".cm-content": { caretColor: "#60a5fa" },
+}, { dark: true });
+
 export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate, theme = 'dark' }) {
 
   const uploadImage = (file, view, pos) => {
@@ -109,6 +120,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     };
 
     return [
+      theme === 'dark' ? editorThemeDark : editorThemeLight, // <-- Injecting explicit base colors here!
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       syntaxHighlighting(theme === 'dark' ? customMarkdownStyleDark : customMarkdownStyleLight),
       wikiLinkPlugin,
@@ -152,7 +164,6 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
   return (
     <CodeMirror
       value={content}
-      // Switch CodeMirror native theme based on our app state
       theme={theme === 'dark' ? vscodeDark : 'light'}
       extensions={editorExtensions}
       onChange={onChange}
