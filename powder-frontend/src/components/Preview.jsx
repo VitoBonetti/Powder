@@ -127,7 +127,13 @@ export default function Preview({ content, onLinkClick, onTagClick }) {
           },
           // --- IMAGES ---
           img({node, src, alt, ...props}) {
-            const fullSrc = src.startsWith('http') ? src : `${BACKEND_URL}/${src}`;
+            let fullSrc = src;
+            if (!src.startsWith('http') && !src.startsWith('data:')) {
+              // Safely construct the URL without creating double slashes (//)
+              const cleanBase = (BACKEND_URL || '').replace(/\/+$/, '');
+              const cleanSrc = src.replace(/^\/+/, '');
+              fullSrc = cleanBase ? `${cleanBase}/${cleanSrc}` : `/${cleanSrc}`;
+            }
             return <img src={fullSrc} alt={alt} className="rounded-lg shadow-md border border-gray-700 max-w-full h-auto my-6" {...props} />;
           },
           // --- CODE & MERMAID ---

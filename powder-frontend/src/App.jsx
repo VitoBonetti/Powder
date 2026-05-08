@@ -207,7 +207,11 @@ function App() {
               ) : isImageFile ? (
                 <div className="h-full overflow-y-auto flex flex-col items-center justify-center pb-20">
                   <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
-                    <img src={`${BACKEND_URL}/${activeFile}`} alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
+                    <img src={
+                      activeFile.startsWith('_Flows/')
+                        ? `${(BACKEND_URL || '').replace(/\/+$/, '')}/api/flow/images/${activeFile}`
+                        : `${(BACKEND_URL || '').replace(/\/+$/, '')}/${activeFile.replace(/^\/+/, '')}`
+                    } alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
                   </div>
                 </div>
               ) : viewMode === 'split' ? (
