@@ -36,7 +36,7 @@ export default function StickyNoteNode({ id, data, selected }) {
       {/* NodeResizer automatically scales the React Flow wrapper. We just listen for when you let go of the mouse to save it! */}
       <NodeResizer
         color="#3b82f6" isVisible={selected} minWidth={200} minHeight={150}
-        onResizeStop={(e, params) => {
+        onResizeEnd={(e, params) => {
           if (data.onUpdate) data.onUpdate(id, text, color, Math.round(params.width), Math.round(params.height));
         }}
       />

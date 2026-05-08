@@ -112,10 +112,11 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       .then(data => {
         const formattedNodes = data.nodes.map(n => {
           if (n.type === 'sticky_note') {
-            // FIX: Read width and height directly from the parsed YAML metadata!
-            const w = n.data.width ? parseInt(n.data.width) : 200;
-            const h = n.data.height ? parseInt(n.data.height) : 150;
-            n.style = { ...n.style, width: w, height: h };
+            const widthMatch = n.data.note.match(/^width:\s*"?(\d+)"?/m);
+            const heightMatch = n.data.note.match(/^height:\s*"?(\d+)"?/m);
+            if (widthMatch || heightMatch) {
+              n.style = { ...n.style, width: widthMatch ? parseInt(widthMatch[1]) : 200, height: heightMatch ? parseInt(heightMatch[1]) : 150 };
+            }
           }
           return n;
         });
