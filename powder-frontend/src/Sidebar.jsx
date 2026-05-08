@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash, Workflow } from 'lucide-react';
 import { getApiUrl, BACKEND_URL } from './config';
 import { limitConcurrency } from './utils/concurrency';
 
@@ -263,7 +263,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename, onAppModeChange }) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
@@ -540,6 +540,14 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
 
       {/* --- FOOTER SECTION: SETTINGS & LOGOUT --- */}
       <div className="mt-auto pt-4 border-t border-gray-800 flex flex-col gap-1 flex-shrink-0">
+        <button
+          onClick={() => onAppModeChange('flow-landing')}
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-emerald-400 hover:bg-emerald-900/10 rounded-md transition-all group"
+        >
+          <Workflow className="w-4 h-4 text-gray-500 group-hover:text-emerald-400" />
+          <span className="font-medium">PentestFlows</span>
+        </button>
+
         <button
           onClick={() => openModal('settings')}
           className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-blue-400 hover:bg-blue-900/10 rounded-md transition-all group"

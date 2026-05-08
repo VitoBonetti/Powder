@@ -9,11 +9,12 @@ import CustomEdge from './edges/CustomEdge';
 // import ToolsLibraryModal from '../components/ui/ToolsLibraryModal';
 import { useCanvas } from '../hooks/useCanvas';
 import { useProjectImport } from '../hooks/useProjectImport';
+import ResultDrawer from './ui/ResultDrawer';
 
 // ------------------------------------------------------------------
 // INNER COMPONENT: Handles all canvas logic and UI
 // ------------------------------------------------------------------
-function CanvasInner({ onNodeOpen, engagementId }) {
+function CanvasInner({ onNodeOpen, onBack, engagementId }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,6 +139,12 @@ function CanvasInner({ onNodeOpen, engagementId }) {
             return '#fde047';
           }}
         />
+
+        <Panel position="top-left" style={{ margin: '15px' }}>
+          <button onClick={onBack} style={{ backgroundColor: '#ffffff', color: '#334155', border: '1px solid #e2e8f0', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', fontWeight: '600' }}>
+            Back to Dashboard
+          </button>
+        </Panel>
 
         <Panel position="top-center" style={{ margin: '15px' }}>
           <div style={{
@@ -333,6 +340,16 @@ function CanvasInner({ onNodeOpen, engagementId }) {
         </div>
       )}
 
+      <div onPointerDown={(e) => e.stopPropagation()}>
+        <ResultDrawer
+          selectedNode={selectedNode}
+          onClose={() => setSelectedNode(null)}
+          onUpdateNode={handleUpdateNode}
+          onDeleteNode={handleDeleteNode}
+          onExportNode={handleExportSingleNode}
+        />
+      </div>
+
     </div>
   );
 }
@@ -340,10 +357,10 @@ function CanvasInner({ onNodeOpen, engagementId }) {
 // ------------------------------------------------------------------
 // OUTER COMPONENT: Provides ReactFlow context to the Inner component
 // ------------------------------------------------------------------
-export default function CanvasPage({ onNodeOpen, engagementId = "default-flow" }) {
+export default function CanvasPage({ onNodeOpen, onBack, engagementId = "default-flow" }) {
   return (
     <ReactFlowProvider>
-      <CanvasInner onNodeOpen={onNodeOpen} engagementId={engagementId} />
+      <CanvasInner onNodeOpen={onNodeOpen} onBack={onBack} engagementId={engagementId} />
     </ReactFlowProvider>
   );
 }
