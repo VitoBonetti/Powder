@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks, Request
 from fastapi.security.api_key import APIKeyHeader
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import List
 from dotenv import load_dotenv
 from models.schemas import NoteData, MoveData, InboxItem, RenameNote, NodeCreate, EdgeCreate
@@ -15,7 +15,8 @@ import uuid
 import json
 import re
 import sqlite3
-import shutil
+import io
+import zipfile
 import time
 
 load_dotenv()
@@ -500,8 +501,6 @@ def serve_flow_image(file_path: str):
 @router.post("/flow/nodes/{node_id}/parse")
 async def parse_scan_file(node_id: str, file: UploadFile = File(...), user: str = Depends(verify_access)):
     try:
-        from parser import route_and_parse
-
         raw_content = await file.read()
         try:
             content_str = raw_content.decode("utf-8")
@@ -521,3 +520,176 @@ async def parse_scan_file(node_id: str, file: UploadFile = File(...), user: str 
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Parsing error: {str(e)}")
+
+
+@router.post("/flow/export/")
+async def export_project(request: Request, user: str = Depends(verify_access)):
+    payload = await request.json()
+    nodes = payload.get("nodes", [])
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        # 1. Add the JSON data to the root of the ZIP
+        zip_file.writestr("data.json", json.dumps(payload, indent=2))
+
+        # 2. Scan the markdown for image links and add those files to the ZIP
+        for node in nodes:
+            md = node.get("markdown_result", "")
+            if md:
+                # Find NEW architecture images (/api/flow/images/_Flows/...)
+                new_matches = re.findall(r'/api/flow/images/([a-zA-Z0-9_./-]+)', md)
+                for file_path in new_matches:
+                    target_file = VAULT_DIR / file_path
+                    if target_file.exists():
+                        # Save it cleanly as 'assets/filename.png' inside the ZIP
+                        zip_file.write(target_file, f"assets/{target_file.name}")
+
+                # Find OLD legacy PentestFlow images (/uploads/...)
+                old_matches = re.findall(r'/uploads/([a-zA-Z0-9_.-]+)', md)
+                for filename in old_matches:
+                    # In case you manually migrated old uploads to assets
+                    target_file = VAULT_DIR / "assets" / filename
+                    if target_file.exists():
+                        zip_file.write(target_file, f"uploads/{filename}")
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=pentest_backup.zip"}
+    )
+
+
+@router.post("/flow/import/")
+async def import_project(file: UploadFile = File(...), user: str = Depends(verify_access)):
+    contents = await file.read()
+    zip_buffer = io.BytesIO(contents)
+    imported_engagement_id = None
+
+    try:
+        with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+            if "data.json" not in zip_file.namelist():
+                raise HTTPException(status_code=400, detail="Invalid zip: data.json missing")
+
+            data_bytes = zip_file.read("data.json")
+            parsed_data = json.loads(data_bytes)
+
+            nodes_data = parsed_data if isinstance(parsed_data, list) else parsed_data.get("nodes", [])
+            edges_data = [] if isinstance(parsed_data, list) else parsed_data.get("edges", [])
+
+            # Backward Compatibility: Auto-migrate edges from old parent_id meta tags
+            if isinstance(parsed_data, list):
+                for node in nodes_data:
+                    parent_id = node.get("meta_tags", {}).get("parent_id")
+                    if parent_id:
+                        edges_data.append(
+                            {"id": f"e-{parent_id}-{node['id']}", "source": str(parent_id), "target": str(node["id"]),
+                             "label": ""})
+
+            conn = get_db()
+            conn.row_factory = sqlite3.Row
+
+            # 1. Process trigger node to establish the Project Folder
+            folder_path = ""
+            trigger_node = next((n for n in nodes_data if n.get("type") == "triggerNode"), None)
+
+            if trigger_node:
+                imported_engagement_id = trigger_node["id"]
+                safe_title = re.sub(r'[^\w\s-]', '', trigger_node.get("title", "Imported_Test")).strip().replace(' ',
+                                                                                                                 '_')
+                folder_path = f"_Flows/{safe_title}_{imported_engagement_id[:8]}"
+                try:
+                    file_system.create_folder(folder_path)
+                except:
+                    pass
+            else:
+                # Fallback if ZIP has no trigger node
+                imported_engagement_id = str(uuid.uuid4())
+                folder_path = f"_Flows/Imported_{int(time.time())}"
+                try:
+                    file_system.create_folder(folder_path)
+                except:
+                    pass
+
+            # 2. Extract Images securely into the new project's isolated assets folder
+            assets_dir = VAULT_DIR / folder_path / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+
+            image_map = {}  # Maps old filenames to new secure URLs
+            for name in zip_file.namelist():
+                if (name.startswith("uploads/") or name.startswith("assets/")) and not name.endswith("/"):
+                    filename = name.split("/")[-1]
+                    file_data = zip_file.read(name)
+                    # Add timestamp to prevent collisions
+                    safe_filename = f"{int(time.time())}_{filename}"
+                    with open(assets_dir / safe_filename, "wb") as f:
+                        f.write(file_data)
+                    # Save the mapping for the markdown rewrite
+                    image_map[filename] = f"/api/flow/images/{folder_path}/assets/{safe_filename}"
+
+            # 3. Process Nodes (Recreate Markdown files + DB Entries)
+            for node in nodes_data:
+                node_id = node["id"]
+                title = node.get("title", "Imported Node")
+                node_type = node.get("type", "actionNode")
+                status = node.get("status", "action")
+                command = node.get("command", "")
+                md_res = node.get("markdown_result", "")
+
+                # REWRITE IMAGE LINKS: Swap old /uploads/ or old /assets/ with the newly extracted path
+                for old_img, new_img in image_map.items():
+                    # Catch legacy paths
+                    md_res = re.sub(r'/uploads/' + re.escape(old_img), new_img, md_res)
+                    # Catch previous Powder paths
+                    md_res = re.sub(r'/api/flow/images/[a-zA-Z0-9_./-]+/assets/' + re.escape(old_img), new_img, md_res)
+
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+                file_path = f"{folder_path}/{safe_title}_{node_id[:8]}.md"
+
+                # Build the Markdown file
+                content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {title}\n\n"
+                if node_type == "stickyNote":
+                    content += node.get("note", "")
+                else:
+                    if command: content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
+                    content += f"## Notes & Evidence\n{md_res}"
+
+                file_system.save_note_content(file_path, content)
+
+                meta_tags = node.get("meta_tags", {})
+                meta_tags.pop("parent_id", None)
+
+                # Upsert into SQLite
+                cursor = conn.execute("SELECT id FROM flow_nodes WHERE id=?", (node_id,))
+                if cursor.fetchone():
+                    conn.execute("""
+                        UPDATE flow_nodes SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=? WHERE id=?
+                    """, (title, node_type, command, status, node.get("position_x", 0), node.get("position_y", 0),
+                          json.dumps(meta_tags), file_path, node_id))
+                else:
+                    conn.execute("""
+                        INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (node_id, title, node_type, command, status, node.get("position_x", 0),
+                          node.get("position_y", 0), file_path, json.dumps(meta_tags)))
+
+            # 4. Process Edges
+            for edge in edges_data:
+                cursor = conn.execute("SELECT id FROM flow_edges WHERE id=?", (edge["id"],))
+                if cursor.fetchone():
+                    conn.execute("UPDATE flow_edges SET source=?, target=?, label=? WHERE id=?",
+                                 (edge.get("source"), edge.get("target"), edge.get("label"), edge["id"]))
+                else:
+                    conn.execute("INSERT INTO flow_edges (id, source, target, label) VALUES (?, ?, ?, ?)",
+                                 (edge["id"], edge.get("source"), edge.get("target"), edge.get("label")))
+
+            conn.commit()
+            conn.close()
+
+        return {
+            "message": "Project imported successfully!",
+            "engagement_id": imported_engagement_id
+        }
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid zip file format")
