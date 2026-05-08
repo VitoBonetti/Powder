@@ -7,6 +7,7 @@ import ActionNode from './nodes/ActionNode';
 import StickyNoteNode from './nodes/StickyNoteNode';
 import CustomEdge from './edges/CustomEdge';
 import ResultDrawer from './ui/ResultDrawer';
+import ToolsLibraryModal from './ui/ToolsLibraryModal';
 import { useCanvas } from '../hooks/useCanvas';
 import { useProjectImport } from '../hooks/useProjectImport';
 
@@ -84,7 +85,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId }) {
   return (
     <div style={{ width: '100%', height: '100%', backgroundColor: '#f8fafc', position: 'relative' }} >
 
-      {/* <ToolsLibraryModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} /> */}
+      <ToolsLibraryModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} />
 
       <ReactFlow
         nodes={nodes} edges={edges}

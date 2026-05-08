@@ -895,3 +895,103 @@ def get_single_node_report(node_id: str, user: str = Depends(verify_access)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=NodeExport_{node_id}.pdf"}
     )
+
+
+# ==============================================================================
+# PENTESTFLOW: TOOLS LIBRARY ROUTES
+# ==============================================================================
+
+@router.get("/flow/categories")
+def get_all_categories(user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(row) for row in conn.execute("SELECT * FROM tool_categories ORDER BY name").fetchall()]
+    finally:
+        conn.close()
+
+
+@router.post("/flow/categories")
+async def create_category(request: Request, user: str = Depends(verify_access)):
+    cat = await request.json()
+    conn = get_db()
+    try:
+        cursor = conn.execute("SELECT id FROM tool_categories WHERE name=?", (cat["name"],))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Category already exists")
+
+        cat_id = str(uuid.uuid4())
+        conn.execute("INSERT INTO tool_categories (id, name) VALUES (?, ?)", (cat_id, cat["name"]))
+        conn.commit()
+        return {"id": cat_id, "name": cat["name"]}
+    finally:
+        conn.close()
+
+
+@router.delete("/flow/categories/{cat_id}")
+def delete_category(cat_id: str, user: str = Depends(verify_access)):
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM tool_categories WHERE id=?", (cat_id,))
+        # Optional: Delete associated tools or leave them orphaned. We'll delete them to stay clean.
+        conn.execute("DELETE FROM tools WHERE category_id=?", (cat_id,))
+        conn.commit()
+        return {"message": "Category deleted"}
+    finally:
+        conn.close()
+
+
+@router.get("/flow/tools")
+def get_all_tools(user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(row) for row in conn.execute("SELECT * FROM tools ORDER BY name").fetchall()]
+    finally:
+        conn.close()
+
+
+@router.post("/flow/tools")
+async def create_tool(request: Request, user: str = Depends(verify_access)):
+    tool = await request.json()
+    tool_id = str(uuid.uuid4())
+    conn = get_db()
+    try:
+        conn.execute("""
+            INSERT INTO tools (id, name, category_id, description, install_linux, install_windows, pentest_notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (tool_id, tool["name"], tool["category_id"], tool.get("description"), tool.get("install_linux"),
+              tool.get("install_windows"), tool.get("pentest_notes")))
+        conn.commit()
+        tool["id"] = tool_id
+        return tool
+    finally:
+        conn.close()
+
+
+@router.put("/flow/tools/{tool_id}")
+async def update_tool(tool_id: str, request: Request, user: str = Depends(verify_access)):
+    tool = await request.json()
+    conn = get_db()
+    try:
+        conn.execute("""
+            UPDATE tools SET name=?, category_id=?, description=?, install_linux=?, install_windows=?, pentest_notes=?
+            WHERE id=?
+        """, (tool["name"], tool["category_id"], tool.get("description"), tool.get("install_linux"),
+              tool.get("install_windows"), tool.get("pentest_notes"), tool_id))
+        conn.commit()
+        tool["id"] = tool_id
+        return tool
+    finally:
+        conn.close()
+
+
+@router.delete("/flow/tools/{tool_id}")
+def delete_tool(tool_id: str, user: str = Depends(verify_access)):
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM tools WHERE id=?", (tool_id,))
+        conn.commit()
+        return {"message": "Tool deleted"}
+    finally:
+        conn.close()

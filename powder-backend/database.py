@@ -76,6 +76,25 @@ def init_db():
 
     conn.execute("UPDATE background_jobs SET status = 'PENDING' WHERE status = 'PROCESSING'")
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tool_categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tools (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category_id TEXT NOT NULL,
+            description TEXT,
+            install_linux TEXT,
+            install_windows TEXT,
+            pentest_notes TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
