@@ -108,13 +108,16 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
     uploadData.append('file', file);
     const toastId = toast.loading('Uploading image...');
     try {
-      const res = await fetch(getApiUrl('/flow/upload/'), { method: 'POST', body: uploadData, credentials: 'include' });
+      // 1. Hit the new node-specific upload route
+      const res = await fetch(getApiUrl(`/flow/nodes/${selectedNode.id}/upload`), { method: 'POST', body: uploadData, credentials: 'include' });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
 
-      const imageUrl = data.url;
+      // 2. Use getApiUrl so the Markdown editor can fetch the absolute path from the backend
+      const imageUrl = getApiUrl(`/flow/images/${data.path}`);
       const imageMarkdown = `\n\n![Evidence Attachment](${imageUrl})\n\n`;
       let newText = formData.markdown_result + imageMarkdown;
+
       setFormData(prev => ({ ...prev, markdown_result: newText }));
       setIsDirty(true);
       toast.success('Image attached!', { id: toastId });

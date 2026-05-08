@@ -162,6 +162,7 @@ function App() {
         onFileDelete={handleFileDelete}
         onFileRename={handleFileRename}
         onAppModeChange={setAppMode}
+        appMode={appMode}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">

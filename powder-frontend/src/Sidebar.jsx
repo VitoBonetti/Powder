@@ -263,7 +263,7 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename, onAppModeChange }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename, onAppModeChange, appMode }) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
@@ -540,13 +540,25 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
 
       {/* --- FOOTER SECTION: SETTINGS & LOGOUT --- */}
       <div className="mt-auto pt-4 border-t border-gray-800 flex flex-col gap-1 flex-shrink-0">
-        <button
-          onClick={() => onAppModeChange('flow-landing')}
-          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-emerald-400 hover:bg-emerald-900/10 rounded-md transition-all group"
-        >
-          <Workflow className="w-4 h-4 text-gray-500 group-hover:text-emerald-400" />
-          <span className="font-medium">PentestFlows</span>
-        </button>
+
+        {/* THE DYNAMIC NAVIGATION TOGGLE */}
+        {appMode === 'flow-landing' || appMode === 'flow-canvas' ? (
+          <button
+            onClick={() => onAppModeChange('vault')}
+            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-blue-400 hover:bg-blue-900/10 rounded-md transition-all group"
+          >
+            <Folder className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
+            <span className="font-medium">PowderVault</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => onAppModeChange('flow-landing')}
+            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-emerald-400 hover:bg-emerald-900/10 rounded-md transition-all group"
+          >
+            <Workflow className="w-4 h-4 text-gray-500 group-hover:text-emerald-400" />
+            <span className="font-medium">PowderFlows</span>
+          </button>
+        )}
 
         <button
           onClick={() => openModal('settings')}

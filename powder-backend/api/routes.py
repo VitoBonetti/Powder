@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, Depends, Response, BackgroundTasks, Request
 from fastapi.security.api_key import APIKeyHeader
+from fastapi.responses import FileResponse
 from typing import List
 from dotenv import load_dotenv
 from models.schemas import NoteData, MoveData, InboxItem, RenameNote, NodeCreate, EdgeCreate
@@ -15,7 +16,7 @@ import json
 import re
 import sqlite3
 import shutil
-
+import time
 
 load_dotenv()
 router = APIRouter()
@@ -457,11 +458,43 @@ def delete_flow_edge(edge_id: str, user: str = Depends(verify_access)):
     return {"status": "deleted"}
 
 
-@router.post("/flow/upload/")
-async def upload_flow_image(file: UploadFile = File(...), user: str = Depends(verify_access)):
+@router.post("/flow/nodes/{node_id}/upload")
+async def upload_flow_image_to_node(node_id: str, file: UploadFile = File(...), user: str = Depends(verify_access)):
+    # 1. Find which test folder this node belongs to
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (node_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # 2. Create an 'assets' folder INSIDE that specific test folder
+    folder_path = row["file_path"].rsplit('/', 1)[0]
+    assets_dir = VAULT_DIR / folder_path / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    # 3. Save the file
+    safe_filename = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
+    file_path_on_disk = assets_dir / safe_filename
+
     content = await file.read()
-    path = file_system.save_asset(file.filename, content)
-    return {"url": f"/{path}"}  # Fixed: Prepend / so Markdown renders it correctly
+    with open(file_path_on_disk, "wb") as f:
+        f.write(content)
+
+    rel_path = f"{folder_path}/assets/{safe_filename}"
+    return {"path": rel_path}
+
+
+@router.get("/flow/images/{file_path:path}")
+def serve_flow_image(file_path: str):
+    """Serves the isolated images directly to the Markdown Editor."""
+    target = VAULT_DIR / file_path
+    if not target.exists() or not str(target.resolve()).startswith(str(VAULT_DIR.resolve())):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(target)
 
 
 @router.post("/flow/nodes/{node_id}/parse")
