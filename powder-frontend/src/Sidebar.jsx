@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash, Workflow } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash, Workflow, Sun, Moon } from 'lucide-react';
 import { getApiUrl, BACKEND_URL } from './config';
 import { limitConcurrency } from './utils/concurrency';
 
@@ -31,17 +31,17 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
     : "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div ref={modalRef} className="bg-[#161b22] border border-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div ref={modalRef} className="bg-white dark:bg-[#161b22] border border-slate-200 dark:border-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white rounded p-1 transition-colors">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-gray-100">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:text-gray-500 dark:hover:text-white rounded p-1 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="text-gray-300 text-sm">{children}</div>
+        <div className="text-slate-600 dark:text-gray-300 text-sm">{children}</div>
         <div className="flex justify-end gap-3 mt-3">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md text-sm font-medium transition-colors">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 rounded-md text-sm font-medium transition-colors">
             Cancel
           </button>
           {actionLabel && (
@@ -89,16 +89,14 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
     if (!isFolder) return;
     const destPath = isRoot ? "" : node.path;
 
-    // 1. Internal Move logic remains unchanged...
     const sourcePath = e.dataTransfer.getData('sourcePath');
-    if (sourcePath) { /* ... existing move code ... */ return; }
+    if (sourcePath) { return; }
 
-    // 2. External Drag & Drop Refactor
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       const items = Array.from(e.dataTransfer.items).filter(i => i.kind === 'file');
       if (items.length === 0) return;
 
-      const mdFilesToUpload = []; // Collect tasks here
+      const mdFilesToUpload = [];
       const assetFilesToUpload = [];
 
       const readEntry = async (entry, path = '') => {
@@ -106,7 +104,6 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
           return new Promise((resolve) => {
             entry.file((file) => {
               if (file.type.startsWith("image/")) {
-                // Create a task function for the asset
                 assetFilesToUpload.push(() => {
                   const imgData = new FormData();
                   imgData.append('file', file);
@@ -131,19 +128,15 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
         }
       };
 
-      // Gather all files from the dropped items
       for (const item of items) {
         const entry = item.webkitGetAsEntry();
         if (entry) await readEntry(entry);
       }
 
-      // Execute Asset Uploads with concurrency limit of 3 (heavier I/O)
       if (assetFilesToUpload.length > 0) {
         await limitConcurrency(3, assetFilesToUpload);
       }
 
-      // Execute Markdown Uploads in a single batch if small,
-      // or partitioned if large (following existing backend pattern)
       if (mdFilesToUpload.length > 0) {
         const formDataMd = new FormData();
         formDataMd.append('target_path', destPath);
@@ -164,10 +157,9 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
       <div
         draggable
         onDragStart={handleDragStart}
-        className="group flex items-center justify-between pl-4 py-1.5 hover:bg-gray-800 cursor-pointer text-gray-300 text-sm rounded-md transition-colors min-w-0"
+        className="group flex items-center justify-between pl-4 py-1.5 hover:bg-slate-200 dark:hover:bg-gray-800 cursor-pointer text-slate-700 dark:text-gray-300 text-sm rounded-md transition-colors min-w-0"
         onClick={() => onFileSelect(node.path)}
       >
-        {/* 2. ADD THE onDoubleClick TRIGGER HERE */}
         <div
           className="flex items-center truncate flex-1 min-w-0"
           onDoubleClick={(e) => {
@@ -177,9 +169,9 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
           }}
         >
           {isImageFile ? (
-            <ImageIcon className="w-4 h-4 mr-2 text-purple-400 flex-shrink-0" />
+            <ImageIcon className="w-4 h-4 mr-2 text-purple-500 dark:text-purple-400 flex-shrink-0" />
           ) : (
-            <FileText className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
+            <FileText className="w-4 h-4 mr-2 text-slate-400 dark:text-gray-500 flex-shrink-0" />
           )}
 
           {renamingPath === node.path ? (
@@ -193,14 +185,14 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
                 if (e.key === 'Enter') submitRename(node.path);
                 if (e.key === 'Escape') setRenamingPath(null);
               }}
-              className="bg-[#010409] border border-blue-500 text-gray-200 px-1 py-0.5 rounded text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 ml-1"
+              className="bg-white dark:bg-[#010409] border border-blue-500 text-slate-900 dark:text-gray-200 px-1 py-0.5 rounded text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 ml-1"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="truncate select-none">{node.name}</span>
           )}
         </div>
-        <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0" />
+        <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0" />
       </div>
     );
   }
@@ -215,33 +207,33 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`group flex items-center justify-between py-1.5 hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors min-w-0 ${
-          isDragOver ? 'bg-blue-900/40 ring-1 ring-blue-500 text-blue-100' : 'text-gray-200'
+        className={`group flex items-center justify-between py-1.5 hover:bg-slate-200 dark:hover:bg-gray-800 cursor-pointer text-sm font-medium rounded-md transition-colors min-w-0 ${
+          isDragOver ? 'bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-500 text-blue-700 dark:text-blue-100' : 'text-slate-800 dark:text-gray-200'
         }`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center truncate flex-1 min-w-0">
-          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-gray-500 flex-shrink-0" />}
-          <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${isAssetsRoot ? 'text-purple-500' : 'text-blue-400'}`} />
+          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-slate-400 dark:text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 mr-1 text-slate-400 dark:text-gray-500 flex-shrink-0" />}
+          <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${isAssetsRoot ? 'text-purple-500' : 'text-blue-500 dark:text-blue-400'}`} />
           <span className="truncate">{node.name}</span>
         </div>
 
         <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition-opacity mx-2 flex-shrink-0">
           {!isAssetFolder && (
             <>
-              <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-gray-600 hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5 flex-shrink-0" /></button>
-              <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-gray-600 hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5 flex-shrink-0" /></button>
+              <button onClick={(e) => { e.stopPropagation(); openModal("import", creationBasePath); }} className="text-slate-400 dark:text-gray-600 hover:text-purple-500 dark:hover:text-purple-400 p-0.5" title="Import into folder"><Upload className="w-3.5 h-3.5 flex-shrink-0" /></button>
+              <button onClick={(e) => { e.stopPropagation(); openModal("createNote", creationBasePath); }} className="text-slate-400 dark:text-gray-600 hover:text-green-600 dark:hover:text-green-400 p-0.5" title="New Note"><Plus className="w-3.5 h-3.5 flex-shrink-0" /></button>
             </>
           )}
-          <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-gray-600 hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5 flex-shrink-0" /></button>
+          <button onClick={(e) => { e.stopPropagation(); openModal("createFolder", creationBasePath); }} className="text-slate-400 dark:text-gray-600 hover:text-blue-600 dark:hover:text-blue-400 p-0.5" title="New Subfolder"><FolderPlus className="w-3.5 h-3.5 flex-shrink-0" /></button>
           {!isRoot && !isAssetsRoot && (
-            <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-gray-600 hover:text-red-400 p-0.5 flex-shrink-0" title="Delete" />
+            <Trash2 onClick={(e) => { e.stopPropagation(); openModal("delete", node); }} className="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 p-0.5 flex-shrink-0" title="Delete" />
           )}
         </div>
       </div>
 
       {(isOpen || isDragOver) && node.children && (
-        <div className="pl-3 border-l border-gray-700 ml-2 mt-1">
+        <div className="pl-3 border-l border-slate-300 dark:border-gray-700 ml-2 mt-1">
           {node.children.map((child, index) => (
             <TreeNode
               key={index}
@@ -263,14 +255,13 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
 };
 
 // --- Main Sidebar Component ---
-export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename, onAppModeChange, appMode }) {
+export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFileDelete, onFileRename, onAppModeChange, appMode, theme, onThemeToggle}) {
   const [tree, setTree] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [inputValue, setInputValue] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
 
-  // NEW: Token Management State
   const [tokens, setTokens] = useState([]);
   const [newToken, setNewToken] = useState("");
 
@@ -281,7 +272,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const isResizing = useRef(false);
 
-  const [viewMode, setViewMode] = useState('files'); // 'files' or 'tags'
+  const [viewMode, setViewMode] = useState('files');
   const [vaultTags, setVaultTags] = useState([]);
 
   const [renamingPath, setRenamingPath] = useState(null);
@@ -308,7 +299,7 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
 
   const submitRename = (oldPath) => {
     if (!renameValue.trim() || oldPath.endsWith(renameValue) || oldPath.endsWith(`${renameValue}.md`)) {
-      setRenamingPath(null); // Cancel if empty or unchanged
+      setRenamingPath(null);
       return;
     }
 
@@ -398,11 +389,9 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
         if (res.ok) {
           const data = await res.json();
           const now = new Date();
-
-          // Substitute variables
           initialContent = data.content
-            .replace(/\{\{date\}\}/g, now.toISOString().split('T')[0]) // e.g., 2026-05-05
-            .replace(/\{\{time\}\}/g, now.toTimeString().split(' ')[0].substring(0, 5)) // e.g., 14:30
+            .replace(/\{\{date\}\}/g, now.toISOString().split('T')[0])
+            .replace(/\{\{time\}\}/g, now.toTimeString().split(' ')[0].substring(0, 5))
             .replace(/\{\{title\}\}/g, inputValue.replace('.md', ''));
         }
       } catch (err) {
@@ -479,20 +468,20 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
   return (
     <div
       style={{ width: `${sidebarWidth}px` }}
-      className="h-screen bg-[#111319] border-r border-gray-800 p-4 flex flex-col z-20 relative flex-shrink-0"
+      className="h-screen bg-slate-50 dark:bg-[#111319] border-r border-slate-200 dark:border-gray-800 p-4 flex flex-col z-20 relative flex-shrink-0 transition-colors duration-200"
     >
       <div
         onMouseDown={startResizing}
-        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-50"
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500/50 transition-colors z-50"
       />
 
       <input type="file" multiple accept=".md" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
       <input type="file" webkitdirectory="true" directory="true" ref={folderInputRef} onChange={handleFileUpload} className="hidden" />
 
       <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0 mt-2">
-        <div className="flex bg-gray-900 rounded-md p-1 w-full border border-gray-800">
-          <button onClick={() => setViewMode('files')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'files' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Files</button>
-          <button onClick={() => setViewMode('tags')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'tags' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Tags</button>
+        <div className="flex bg-slate-200 dark:bg-gray-900 rounded-md p-1 w-full border border-slate-300 dark:border-gray-800 transition-colors">
+          <button onClick={() => setViewMode('files')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'files' ? 'bg-white dark:bg-gray-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-300'}`}>Files</button>
+          <button onClick={() => setViewMode('tags')} className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-sm transition-colors ${viewMode === 'tags' ? 'bg-white dark:bg-gray-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-300'}`}>Tags</button>
         </div>
       </div>
 
@@ -511,24 +500,24 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
               submitRename={submitRename}
             />
           ) : (
-            <div className="text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
+            <div className="text-slate-400 dark:text-gray-500 text-sm px-2 animate-pulse">Loading vault...</div>
           )
         ) : (
           <div className="flex flex-col gap-1 px-2 mt-2">
             {vaultTags.length === 0 ? (
-              <div className="text-gray-600 text-xs italic text-center mt-4">No tags found. Type #tag in a note to create one.</div>
+              <div className="text-slate-500 dark:text-gray-600 text-xs italic text-center mt-4">No tags found. Type #tag in a note to create one.</div>
             ) : (
               vaultTags.map((tagObj) => (
                 <div
                   key={tagObj.tag}
                   onClick={() => onTagClick(`#${tagObj.tag}`)}
-                  className="group flex items-center justify-between px-3 py-2 bg-gray-900/50 hover:bg-blue-900/30 border border-gray-800 hover:border-blue-800/50 rounded-lg cursor-pointer transition-all"
+                  className="group flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-800/50 rounded-lg cursor-pointer transition-all"
                 >
-                  <div className="flex items-center text-sm font-medium text-blue-400 group-hover:text-blue-300">
+                  <div className="flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300">
                     <Hash className="w-3.5 h-3.5 mr-1.5 opacity-70" />
                     {tagObj.tag}
                   </div>
-                  <span className="text-[10px] font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full group-hover:bg-blue-900/50 group-hover:text-blue-300">
+                  <span className="text-[10px] font-bold bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 px-2 py-0.5 rounded-full group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
                     {tagObj.count}
                   </span>
                 </div>
@@ -538,45 +527,54 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
         )}
       </div>
 
-      {/* --- FOOTER SECTION: SETTINGS & LOGOUT --- */}
-      <div className="mt-auto pt-4 border-t border-gray-800 flex flex-col gap-1 flex-shrink-0">
+      <div className="mt-auto pt-4 border-t border-slate-200 dark:border-gray-800 flex flex-col gap-1 flex-shrink-0 transition-colors">
 
-        {/* THE DYNAMIC NAVIGATION TOGGLE */}
         {appMode === 'flow-landing' || appMode === 'flow-canvas' ? (
           <button
             onClick={() => onAppModeChange('vault')}
-            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-blue-400 hover:bg-blue-900/10 rounded-md transition-all group"
+            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-md transition-all group"
           >
-            <Folder className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
+            <Folder className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
             <span className="font-medium">PowderVault</span>
           </button>
         ) : (
           <button
             onClick={() => onAppModeChange('flow-landing')}
-            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-emerald-400 hover:bg-emerald-900/10 rounded-md transition-all group"
+            className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 rounded-md transition-all group"
           >
-            <Workflow className="w-4 h-4 text-gray-500 group-hover:text-emerald-400" />
+            <Workflow className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400" />
             <span className="font-medium">PowderFlows</span>
           </button>
         )}
 
         <button
           onClick={() => openModal('settings')}
-          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-blue-400 hover:bg-blue-900/10 rounded-md transition-all group"
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-md transition-all group"
         >
-          <Settings className="w-4 h-4 text-gray-500 group-hover:text-blue-400" />
+          <Settings className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
           <span className="font-medium">API Settings</span>
         </button>
 
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-400 hover:text-red-400 hover:bg-red-900/10 rounded-md transition-all group"
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-md transition-all group"
         >
-          <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+          <LogOut className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-red-600 dark:group-hover:text-red-400" />
           <span className="font-medium">Logout</span>
         </button>
 
-        <div className="mt-1 px-3 py-1 text-[10px] text-gray-600 uppercase tracking-widest">
+        <button
+          onClick={onThemeToggle}
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10 rounded-md transition-all group"
+        >
+          {theme === 'dark' ? (
+            <><Sun className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-amber-400" /><span className="font-medium">Light Mode</span></>
+          ) : (
+            <><Moon className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-amber-600" /><span className="font-medium">Dark Mode</span></>
+          )}
+        </button>
+
+        <div className="mt-1 px-3 py-1 text-[10px] text-slate-400 dark:text-gray-600 uppercase tracking-widest">
           Vault Secured
         </div>
       </div>
@@ -584,12 +582,12 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
       {/* --- MODALS --- */}
       <Modal isOpen={activeModal === 'settings'} onClose={closeModal} title="CLI & API Access">
         <div className="space-y-4">
-          <p className="text-xs text-gray-400">Manage Personal Access Tokens for your CLI and terminal agents.</p>
+          <p className="text-xs text-slate-500 dark:text-gray-400">Manage Personal Access Tokens for your CLI and terminal agents.</p>
 
           {newToken && (
-            <div className="p-3 bg-green-900/30 border border-green-500 rounded text-xs break-all animate-in fade-in slide-in-from-top-2">
-              <p className="text-green-400 font-bold mb-1">Copy this now (it won't be shown again):</p>
-              <code className="text-white selection:bg-green-500">{newToken}</code>
+            <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-500 rounded text-xs break-all animate-in fade-in slide-in-from-top-2">
+              <p className="text-green-700 dark:text-green-400 font-bold mb-1">Copy this now (it won't be shown again):</p>
+              <code className="text-slate-800 dark:text-white selection:bg-green-200 dark:selection:bg-green-500">{newToken}</code>
             </div>
           )}
 
@@ -599,30 +597,30 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               placeholder="Token Name (e.g. Work Laptop)"
-              className="flex-1 bg-gray-900 border border-gray-700 p-2 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex-1 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 p-2 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             <button
               onClick={handleGenerateToken}
-              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
             >
               Generate
             </button>
           </div>
 
-          <div className="border-t border-gray-800 pt-2 max-h-48 overflow-y-auto">
-            <h4 className="text-[10px] uppercase text-gray-500 font-bold mb-2">Active Tokens</h4>
+          <div className="border-t border-slate-200 dark:border-gray-800 pt-2 max-h-48 overflow-y-auto">
+            <h4 className="text-[10px] uppercase text-slate-500 dark:text-gray-500 font-bold mb-2">Active Tokens</h4>
             {tokens.length === 0 ? (
-              <p className="text-xs text-gray-600 italic">No active tokens found.</p>
+              <p className="text-xs text-slate-400 dark:text-gray-600 italic">No active tokens found.</p>
             ) : (
               tokens.map(t => (
-                <div key={t.id} className="flex justify-between items-center text-xs py-2 border-b border-gray-800/50">
+                <div key={t.id} className="flex justify-between items-center text-xs py-2 border-b border-slate-100 dark:border-gray-800/50">
                   <div className="flex flex-col">
-                    <span className="text-gray-200">{t.name}</span>
-                    <span className="text-[9px] text-gray-600">{new Date(t.created_at).toLocaleDateString()}</span>
+                    <span className="text-slate-700 dark:text-gray-200">{t.name}</span>
+                    <span className="text-[9px] text-slate-400 dark:text-gray-600">{new Date(t.created_at).toLocaleDateString()}</span>
                   </div>
                   <button
                     onClick={() => handleRevokeToken(t.id)}
-                    className="text-red-500 hover:text-red-400 text-[10px] font-bold"
+                    className="text-red-500 hover:text-red-600 dark:hover:text-red-400 text-[10px] font-bold"
                   >
                     REVOKE
                   </button>
@@ -630,17 +628,17 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
               ))
             )}
           </div>
-          {/* --- NEW: TROUBLESHOOTING ZONE --- */}
-          <div className="mt-6 border-t border-gray-800 pt-4">
-            <h4 className="text-xs uppercase text-red-500 font-bold mb-2">Danger Zone / Troubleshooting</h4>
-            <p className="text-[10px] text-gray-500 mb-3">If search results or tags ever fall out of sync (ghost tags), you can force a complete rebuild of the SQLite database.</p>
+
+          <div className="mt-6 border-t border-slate-200 dark:border-gray-800 pt-4">
+            <h4 className="text-xs uppercase text-red-600 dark:text-red-500 font-bold mb-2">Danger Zone / Troubleshooting</h4>
+            <p className="text-[10px] text-slate-500 dark:text-gray-500 mb-3">If search results or tags ever fall out of sync (ghost tags), you can force a complete rebuild of the SQLite database.</p>
             <button
               onClick={() => {
                 fetch(getApiUrl('/reindex'), { method: 'POST', credentials: 'include' })
                   .then(() => { fetchTree(); alert("Database successfully rebuilt!"); })
                   .catch(err => alert("Failed to rebuild: " + err));
               }}
-              className="w-full py-2 bg-red-900/10 text-red-400 border border-red-900 hover:bg-red-900/30 hover:text-red-300 rounded text-xs font-medium transition-colors"
+              className="w-full py-2 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-300 rounded text-xs font-medium transition-colors"
             >
               Rebuild Search & Tag Database
             </button>
@@ -649,12 +647,12 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
       </Modal>
 
       <Modal isOpen={activeModal === 'import'} onClose={closeModal} title="Import into Vault">
-        <p className="mb-4">Select what you would like to import into <strong className="text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
+        <p className="mb-4">Select what you would like to import into <strong className="text-slate-900 dark:text-white">'{modalTarget === "" ? "Vault" : modalTarget}'</strong>.</p>
         <div className="flex flex-col gap-3">
-          <button onClick={() => { fileInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md border border-gray-700 transition-colors">
+          <button onClick={() => { fileInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-md border border-slate-200 dark:border-gray-700 transition-colors">
             <FileText className="w-5 h-5" /> Import Markdown File(s)
           </button>
-          <button onClick={() => { folderInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md border border-gray-700 transition-colors">
+          <button onClick={() => { folderInputRef.current.click(); closeModal(); }} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 rounded-md border border-slate-200 dark:border-gray-700 transition-colors">
             <Folder className="w-5 h-5" /> Import Entire Folder
           </button>
         </div>
@@ -662,35 +660,34 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
 
       <Modal isOpen={activeModal === 'createNote'} onClose={closeModal} title="Create New Note" actionLabel="Create Note" onAction={handleCreateNoteAction}>
         <p className="mb-3">Enter a name for the new Markdown file.</p>
-        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="My New Note" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm mb-3" />
+        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="My New Note" autoFocus className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded-md text-slate-900 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm mb-3" />
 
-        {/* Template Selector */}
         {tree && tree.children && tree.children.find(c => c.name === '_Templates') && (
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Apply Template (Optional)</label>
+            <label className="block text-xs font-bold text-slate-500 dark:text-gray-500 uppercase tracking-wider mb-1">Apply Template (Optional)</label>
             <select
               value={selectedTemplate}
               onChange={(e) => setSelectedTemplate(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded-md text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="">-- No Template --</option>
               {tree.children.find(c => c.name === '_Templates').children.filter(f => f.type === 'file').map(template => (
                 <option key={template.name} value={template.name}>{template.name}</option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-500 mt-1">Supports: {'{{date}}, {{time}}, {{title}}'}</p>
+            <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">Supports: {'{{date}}, {{time}}, {{title}}'}</p>
           </div>
         )}
       </Modal>
 
       <Modal isOpen={activeModal === 'createFolder'} onClose={closeModal} title="Create New Folder" actionLabel="Create Folder" onAction={handleCreateFolderAction}>
         <p className="mb-3">Enter a name for the new subfolder.</p>
-        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="New Folder Name" autoFocus className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
+        <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="New Folder Name" autoFocus className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-slate-300 dark:border-gray-700 rounded-md text-slate-900 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
       </Modal>
 
       <Modal isOpen={activeModal === 'delete'} onClose={closeModal} title="Confirm Deletion" actionLabel="Delete Permanently" onAction={handleDeleteAction} actionVariant="danger">
-        <p>Are you sure you want to permanently delete <strong className="text-white">'{modalTarget?.name}'</strong>?</p>
-        <p className="mt-2 text-amber-400 text-xs bg-amber-950 p-2 rounded-md border border-amber-800">⚠️ This action cannot be undone and will delete all contents.</p>
+        <p>Are you sure you want to permanently delete <strong className="text-slate-900 dark:text-white">'{modalTarget?.name}'</strong>?</p>
+        <p className="mt-2 text-amber-700 dark:text-amber-400 text-xs bg-amber-50 dark:bg-amber-950 p-2 rounded-md border border-amber-200 dark:border-amber-800">⚠️ This action cannot be undone and will delete all contents.</p>
       </Modal>
     </div>
   );

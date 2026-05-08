@@ -17,13 +17,10 @@ import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircl
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-
   const [appMode, setAppMode] = useState('vault'); // 'vault' | 'flow-landing' | 'flow-canvas'
   const [activeEngagementId, setActiveEngagementId] = useState(null);
-
-  // NEW: Global Sync Bridge State
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
-
+  const [theme, setTheme] = useState('dark');
   const [content, setContent] = useState("");
   const [viewMode, setViewMode] = useState('edit');
   const [activeFile, setActiveFile] = useState(null);
@@ -155,92 +152,98 @@ function App() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden font-sans">
-      <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm font-medium' }} />
-      <Sidebar
-        onFileSelect={openFileInTab}
-        refreshTrigger={(lastSaved || 0) + sidebarRefresh} // COMBINED REFRESH TRIGGER
-        onTagClick={handleTagClick}
-        onFileDelete={handleFileDelete}
-        onFileRename={handleFileRename}
-        onAppModeChange={setAppMode}
-        appMode={appMode}
-      />
+    <div className={theme}>
+      <div className="flex h-screen bg-slate-50 dark:bg-[#0d1117] text-slate-900 dark:text-[#c9d1d9] overflow-hidden font-sans transition-colors duration-200">
+        <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm font-medium' }} />
+        <Sidebar
+          onFileSelect={openFileInTab}
+          refreshTrigger={(lastSaved || 0) + sidebarRefresh}
+          onTagClick={handleTagClick}
+          onFileDelete={handleFileDelete}
+          onFileRename={handleFileRename}
+          onAppModeChange={setAppMode}
+          appMode={appMode}
+          theme={theme} // Pass theme down
+          onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} // Pass toggle function
+        />
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        {appMode === 'flow-landing' ? (
-          <div className="h-full overflow-y-auto">
-            <LandingPage
-              onSelectEngagement={(id) => { setActiveEngagementId(id); setAppMode('flow-canvas'); }}
-              onFlowChange={() => setSidebarRefresh(Date.now())}
-            />
-          </div>
-        ) : appMode === 'flow-canvas' ? (
-           <CanvasPage
-             engagementId={activeEngagementId}
-             onBack={() => setAppMode('flow-landing')}
-             onNodeOpen={openFileInTab}
-             onFlowChange={() => setSidebarRefresh(Date.now())}
-           />
-        ) : (
-          <>
-            <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
+        <main className="flex-1 flex flex-col overflow-hidden relative">
+          {appMode === 'flow-landing' ? (
+            <div className="h-full overflow-y-auto">
+              <LandingPage
+                onSelectEngagement={(id) => { setActiveEngagementId(id); setAppMode('flow-canvas'); }}
+                onFlowChange={() => setSidebarRefresh(Date.now())}
+                theme={theme}
+              />
+            </div>
+          ) : appMode === 'flow-canvas' ? (
+             <CanvasPage
+               engagementId={activeEngagementId}
+               onBack={() => setAppMode('flow-landing')}
+               onNodeOpen={openFileInTab}
+               onFlowChange={() => setSidebarRefresh(Date.now())}
+               theme={theme}
+             />
+          ) : (
+            <>
+              <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} theme={theme} />
 
-            {activeFile && !isImageFile && (
-              <div className="absolute bottom-8 right-8 z-20 flex bg-[#161b22] border border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-opacity">
-                <button onClick={() => setViewMode('edit')} title="Edit Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}> <Edit3 className="w-4 h-4" /> </button>
-                <button onClick={() => setViewMode('split')} title="Split Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'split' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}> <Columns className="w-4 h-4" /> </button>
-                <button onClick={() => setViewMode('preview')} title="Preview Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'preview' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}> <Eye className="w-4 h-4" /> </button>
-                <div className="w-px bg-gray-700 mx-1"></div>
-                <button onClick={() => setViewMode('graph')} title="Knowledge Graph" className={`p-1.5 rounded transition-colors ${viewMode === 'graph' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}> <Network className="w-4 h-4" /> </button>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-hidden p-4">
-              {viewMode === 'graph' ? (
-                <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
-                  <GraphView onNodeClick={(path) => { openFileInTab(path); setViewMode('edit'); }} />
-                </div>
-              ) : !activeFile ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                  <Network className="w-16 h-16 mb-4 text-gray-700" />
-                  <p>Select a note from the sidebar to start writing.</p>
-                </div>
-              ) : isImageFile ? (
-                <div className="h-full overflow-y-auto flex flex-col items-center justify-center pb-20">
-                  <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
-                    <img src={
-                      activeFile.startsWith('_Flows/')
-                        ? `${(BACKEND_URL || '').replace(/\/+$/, '')}/api/flow/images/${activeFile}`
-                        : `${(BACKEND_URL || '').replace(/\/+$/, '')}/${activeFile.replace(/^\/+/, '')}`
-                    } alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
-                  </div>
-                </div>
-              ) : viewMode === 'split' ? (
-                <div className="flex h-full gap-6">
-                  <div className="flex-1 overflow-y-auto border-r border-gray-800 pr-4 hide-scroll">
-                    <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
-                  </div>
-                  <div className="flex-1 overflow-y-auto pl-2 hide-scroll">
-                    <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
-                  </div>
-                </div>
-              ) : viewMode === 'preview' ? (
-                <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
-                  <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
-                </div>
-              ) : (
-                <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
-                  <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+              {activeFile && !isImageFile && (
+                <div className="absolute bottom-8 right-8 z-20 flex bg-white dark:bg-[#161b22] border border-slate-200 dark:border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-all">
+                  <button onClick={() => setViewMode('edit')} title="Edit Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'edit' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Edit3 className="w-4 h-4" /> </button>
+                  <button onClick={() => setViewMode('split')} title="Split Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'split' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Columns className="w-4 h-4" /> </button>
+                  <button onClick={() => setViewMode('preview')} title="Preview Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'preview' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Eye className="w-4 h-4" /> </button>
+                  <div className="w-px bg-gray-700 mx-1"></div>
+                  <button onClick={() => setViewMode('graph')} title="Knowledge Graph" className={`p-1.5 rounded transition-colors ${viewMode === 'graph' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Network className="w-4 h-4" /> </button>
                 </div>
               )}
-            </div>
-          </>
-        )}
-      </main>
 
-      <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} onCommand={handleGlobalCommand} initialQuery={searchInitialQuery} />
-      <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} onSelect={handleInsertTemplate} />
+              <div className="flex-1 overflow-hidden p-4">
+                {viewMode === 'graph' ? (
+                  <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
+                    <GraphView onNodeClick={(path) => { openFileInTab(path); setViewMode('edit'); }} />
+                  </div>
+                ) : !activeFile ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                    <Network className="w-16 h-16 mb-4 text-gray-700" />
+                    <p>Select a note from the sidebar to start writing.</p>
+                  </div>
+                ) : isImageFile ? (
+                  <div className="h-full overflow-y-auto flex flex-col items-center justify-center pb-20">
+                    <div className="bg-[#161b22] p-4 rounded-xl border border-gray-800 shadow-2xl max-w-4xl w-full flex justify-center">
+                      <img src={
+                        activeFile.startsWith('_Flows/')
+                          ? `${(BACKEND_URL || '').replace(/\/+$/, '')}/api/flow/images/${activeFile}`
+                          : `${(BACKEND_URL || '').replace(/\/+$/, '')}/${activeFile.replace(/^\/+/, '')}`
+                      } alt={activeFile} className="max-w-full max-h-[70vh] object-contain rounded-md" />
+                    </div>
+                  </div>
+                ) : viewMode === 'split' ? (
+                  <div className="flex h-full gap-6">
+                    <div className="flex-1 overflow-y-auto border-r border-gray-800 pr-4 hide-scroll">
+                      <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+                    </div>
+                    <div className="flex-1 overflow-y-auto pl-2 hide-scroll">
+                      <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+                    </div>
+                  </div>
+                ) : viewMode === 'preview' ? (
+                  <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
+                    <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+                  </div>
+                ) : (
+                  <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
+                    <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+
+        <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} onCommand={handleGlobalCommand} initialQuery={searchInitialQuery} theme={theme} />
+        <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} onSelect={handleInsertTemplate} theme={theme} />
+      </div>
     </div>
   );
 }
