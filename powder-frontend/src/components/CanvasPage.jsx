@@ -1,6 +1,5 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { ReactFlow, Background, Controls, Panel, MiniMap, useReactFlow, ReactFlowProvider } from '@xyflow/react';
-import { useParams, useNavigate } from 'react-router-dom';
 import '@xyflow/react/dist/style.css';
 
 import StartingNode from './nodes/StartingNode';
@@ -9,14 +8,12 @@ import StickyNoteNode from './nodes/StickyNoteNode';
 import CustomEdge from './edges/CustomEdge';
 // import ToolsLibraryModal from '../components/ui/ToolsLibraryModal';
 import { useCanvas } from '../hooks/useCanvas';
-// import { useProjectImport } from '../hooks/useProjectImport';
+import { useProjectImport } from '../hooks/useProjectImport';
 
 // ------------------------------------------------------------------
 // INNER COMPONENT: Handles all canvas logic and UI
 // ------------------------------------------------------------------
-function CanvasInner({ onNodeOpen }) {
-  const { engagementId } = useParams();
-  const navigate = useNavigate();
+function CanvasInner({ onNodeOpen, engagementId }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,8 +33,13 @@ function CanvasInner({ onNodeOpen }) {
     handleGenerateReport, handleExportSingleNode, setNodes, setEdges
   } = useCanvas(engagementId);
 
-  const { importFileRef, handleImportZip } = useProjectImport(navigate);
+  // Replaced navigate with a simple window reload to cleanly refresh graph state after import
+  const { importFileRef, handleImportZip } = useProjectImport(() => {
+    window.location.reload();
+  });
+
   const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
+
   // Register the visual node and edge types
   const nodeTypes = useMemo(() => ({ triggerNode: StartingNode, actionNode: ActionNode, stickyNote: StickyNoteNode }), []);
   const edgeTypes = useMemo(() => ({ custom: CustomEdge }), []);
@@ -94,8 +96,11 @@ function CanvasInner({ onNodeOpen }) {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', backgroundColor: '#f8fafc', position: 'relative' }} >
-      <ToolsLibraryModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} />
+    <div style={{ width: '100%', height: '100%', backgroundColor: '#f8fafc', position: 'relative' }} >
+
+      {/* RESTORED MODAL INVOCATION (Keep commented in your actual file if you haven't copied it yet, or uncomment if you have) */}
+      {/* <ToolsLibraryModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} /> */}
+
       <ReactFlow
         nodes={nodes} edges={edges}
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
@@ -133,12 +138,6 @@ function CanvasInner({ onNodeOpen }) {
             return '#fde047';
           }}
         />
-
-        <Panel position="top-left" style={{ margin: '15px' }}>
-          <button onClick={() => navigate('/')} style={{ backgroundColor: '#ffffff', color: '#334155', border: '1px solid #e2e8f0', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', fontWeight: '600' }}>
-            Back to Dashboard
-          </button>
-        </Panel>
 
         <Panel position="top-center" style={{ margin: '15px' }}>
           <div style={{
@@ -193,6 +192,7 @@ function CanvasInner({ onNodeOpen }) {
                 padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px',
                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', zIndex: 1000, width: '180px'
               }}>
+                {/* RESTORED TOOLS LIBRARY BUTTON */}
                 <button
                   onClick={() => { setIsToolsModalOpen(true); setIsMenuOpen(false); }}
                   style={menuButtonStyle}
@@ -268,7 +268,7 @@ function CanvasInner({ onNodeOpen }) {
             {/* The Divider */}
             <div style={{ width: '1px', height: '20px', backgroundColor: '#e2e8f0', margin: '0 4px' }} />
 
-            {/* The Sticky Note Button - Passes reactFlowInstance to calculate center coordinates! */}
+            {/* The Sticky Note Button */}
             <button
               onClick={() => createStickyNote(reactFlowInstance)}
               style={{ backgroundColor: 'transparent', color: '#0ea5e9', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}
@@ -340,10 +340,10 @@ function CanvasInner({ onNodeOpen }) {
 // ------------------------------------------------------------------
 // OUTER COMPONENT: Provides ReactFlow context to the Inner component
 // ------------------------------------------------------------------
-export default function CanvasPage({ onNodeOpen }) {
+export default function CanvasPage({ onNodeOpen, engagementId = "default-flow" }) {
   return (
     <ReactFlowProvider>
-      <CanvasInner onNodeOpen={onNodeOpen} />
+      <CanvasInner onNodeOpen={onNodeOpen} engagementId={engagementId} />
     </ReactFlowProvider>
   );
 }
