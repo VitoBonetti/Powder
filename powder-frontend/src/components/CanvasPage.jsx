@@ -85,7 +85,6 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
     );
   }, [nodes, setEdges]);
 
-  // Expanded Theme Dictionary
   const t = theme === 'dark' ? {
     bg: '#0d1117',
     panelBg: '#161b22',
@@ -125,7 +124,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         backgroundColor: active ? t.activeBg : 'transparent',
         color: active ? t.activeText : t.textMuted,
         border: 'none',
-        padding: '8px',
+        padding: '10px', // Slightly larger padding for vertical palette
         borderRadius: '8px',
         cursor: 'pointer',
         display: 'flex',
@@ -136,7 +135,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
       onMouseOver={(e) => !active && (e.currentTarget.style.backgroundColor = t.hover)}
       onMouseOut={(e) => !active && (e.currentTarget.style.backgroundColor = 'transparent')}
     >
-      <Icon size={18} strokeWidth={2.5} />
+      <Icon size={20} strokeWidth={2.5} />
     </button>
   );
 
@@ -172,41 +171,65 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         <Controls style={{ backgroundColor: t.panelBg, color: t.text, border: `1px solid ${t.border}`, boxShadow: t.shadow }} />
         <MiniMap nodeStrokeWidth={3} zoomable pannable style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', boxShadow: t.shadow }} nodeColor={(node) => { if (node.data?.status === 'vulnerability') return '#fca5a5'; if (node.data?.status === 'path') return '#86efac'; if (node.data?.status === 'rabbit_hole') return '#cbd5e1'; return '#fde047'; }} />
 
-        {/* UNIFIED TOP-LEFT PALETTE */}
-        <Panel position="top-left" style={{ margin: '20px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 1000 }}>
+        {/* UNIFIED VERTICAL TOP-LEFT PALETTE */}
+        <Panel position="top-left" style={{ margin: '20px', zIndex: 1000 }}>
 
-          {/* Main Toolbar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: t.panelBg, padding: '6px', borderRadius: '12px', boxShadow: t.shadow, border: `1px solid ${t.border}` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '12px', boxShadow: t.shadow, border: `1px solid ${t.border}`, width: 'fit-content' }}>
+
             <ToolButton onClick={onBack} icon={ArrowLeft} title="Back to Dashboard" />
 
-            <div style={{ width: '1px', height: '20px', backgroundColor: t.border, margin: '0 4px' }} />
+            {/* Search Toggle (Positioned 2nd, with right-popout) */}
+            <div style={{ position: 'relative', width: '100%' }}>
+              <ToolButton
+                active={isSearchOpen}
+                onClick={() => { setIsSearchOpen(!isSearchOpen); setIsMenuOpen(false); }}
+                icon={Search}
+                title="Search & Filter"
+              />
+              {isSearchOpen && (
+                <div style={{ position: 'absolute', top: 0, left: 'calc(100% + 14px)', display: 'flex', gap: '8px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '10px', border: `1px solid ${t.border}`, boxShadow: t.shadow, width: 'max-content', zIndex: 1001 }}>
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Search tools, IPs, queries..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', width: '250px', fontSize: '13px' }}
+                  />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' }}
+                  >
+                    <option value="all">All Nodes</option>
+                    <option value="vulnerability">Vulnerabilities</option>
+                    <option value="path">Attack Paths</option>
+                    <option value="action">Standard Actions</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Horizontal Divider */}
+            <div style={{ width: '24px', height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
 
             <ToolButton active={!isSelectMode} onClick={() => {setIsSelectMode(false); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={Hand} title="Pan Canvas" />
             <ToolButton active={isSelectMode} onClick={() => {setIsSelectMode(true); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={MousePointer2} title="Select Nodes" />
             <ToolButton onClick={() => {createStickyNote(reactFlowInstance); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={StickyNote} title="Add Sticky Note" />
 
-            <div style={{ width: '1px', height: '20px', backgroundColor: t.border, margin: '0 4px' }} />
+            {/* Horizontal Divider */}
+            <div style={{ width: '24px', height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
 
-            {/* Search Toggle */}
-            <ToolButton
-              active={isSearchOpen}
-              onClick={() => { setIsSearchOpen(!isSearchOpen); setIsMenuOpen(false); }}
-              icon={Search}
-              title="Search & Filter"
-            />
-
-            {/* Menu Toggle */}
-            <div style={{ position: 'relative' }}>
+            {/* Menu Toggle (With right-popout) */}
+            <div style={{ position: 'relative', width: '100%' }}>
               <ToolButton
                 active={isMenuOpen}
                 onClick={() => { setIsMenuOpen(!isMenuOpen); setIsSearchOpen(false); }}
                 icon={Menu}
                 title="Project Menu"
               />
-
-              {/* Expandable Menu Popout */}
               {isMenuOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 14px)', left: 0, backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', boxShadow: t.shadow, minWidth: '220px' }}>
+                <div style={{ position: 'absolute', top: 0, left: 'calc(100% + 14px)', backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', boxShadow: t.shadow, minWidth: '220px', zIndex: 1001 }}>
                   <button onClick={() => { setIsToolsModalOpen(true); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
                     <Wrench size={16} /> Tools Library
                   </button>
@@ -231,31 +254,8 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Expandable Search Popout */}
-          {isSearchOpen && (
-            <div style={{ display: 'flex', gap: '8px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '10px', border: `1px solid ${t.border}`, boxShadow: t.shadow, width: 'max-content', marginTop: '4px' }}>
-              <input
-                type="text"
-                autoFocus
-                placeholder="Search tools, IPs, queries..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', width: '250px', fontSize: '13px' }}
-              />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' }}
-              >
-                <option value="all">All Nodes</option>
-                <option value="vulnerability">Vulnerabilities</option>
-                <option value="path">Attack Paths</option>
-                <option value="action">Standard Actions</option>
-              </select>
-            </div>
-          )}
+          </div>
         </Panel>
 
       </ReactFlow>
