@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { ReactFlow, Background, Controls, Panel, MiniMap, useReactFlow, ReactFlowProvider } from '@xyflow/react';
-import { ArrowLeft, Hand, MousePointer2, StickyNote, Search, Menu, Wrench, Network, FileText, FileWarning, Download, Upload } from 'lucide-react';
+import { ReactFlow, Background, Panel, MiniMap, useReactFlow, ReactFlowProvider } from '@xyflow/react';
+// Added ZoomIn, ZoomOut, Maximize, Lock, and Unlock icons
+import { ArrowLeft, Hand, MousePointer2, StickyNote, Search, Menu, Wrench, Network, FileText, FileWarning, Download, Upload, ZoomIn, ZoomOut, Maximize, Lock, Unlock } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 
 import StartingNode from './nodes/StartingNode';
@@ -15,9 +16,10 @@ import { useProjectImport } from '../hooks/useProjectImport';
 function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
 
-  // Toggle states for the unified palette
+  // Toggle states for the unified palettes
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState(false); // NEW: Canvas Lock State
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -124,7 +126,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         backgroundColor: active ? t.activeBg : 'transparent',
         color: active ? t.activeText : t.textMuted,
         border: 'none',
-        padding: '10px', // Slightly larger padding for vertical palette
+        padding: '10px',
         borderRadius: '8px',
         cursor: 'pointer',
         display: 'flex',
@@ -146,6 +148,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
 
       <ReactFlow
         colorMode={theme}
+        proOptions={{ hideAttribution: true }}
         nodes={nodes} edges={edges}
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClickWrapper}
@@ -164,12 +167,19 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView fitViewOptions={{ padding: 0.5, maxZoom: 0.8 }}
-        panOnDrag={!isSelectMode}
-        selectionOnDrag={isSelectMode}
+
+        // NEW: Map the lock state dynamically to all interactivity props
+        panOnDrag={!isLocked && !isSelectMode}
+        selectionOnDrag={!isLocked && isSelectMode}
+        nodesDraggable={!isLocked}
+        zoomOnScroll={!isLocked}
+        zoomOnPinch={!isLocked}
+        zoomOnDoubleClick={!isLocked}
       >
         <Background color={theme === 'dark' ? '#30363d' : '#cbd5e1'} variant="dots" />
-        <Controls style={{ backgroundColor: t.panelBg, color: t.text, border: `1px solid ${t.border}`, boxShadow: t.shadow }} />
-        <MiniMap nodeStrokeWidth={3} zoomable pannable style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', boxShadow: t.shadow }} nodeColor={(node) => { if (node.data?.status === 'vulnerability') return '#fca5a5'; if (node.data?.status === 'path') return '#86efac'; if (node.data?.status === 'rabbit_hole') return '#cbd5e1'; return '#fde047'; }} />
+
+        {/* Make MiniMap respect the lock state too */}
+        <MiniMap nodeStrokeWidth={3} zoomable={!isLocked} pannable={!isLocked} style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', boxShadow: t.shadow }} nodeColor={(node) => { if (node.data?.status === 'vulnerability') return '#fca5a5'; if (node.data?.status === 'path') return '#86efac'; if (node.data?.status === 'rabbit_hole') return '#cbd5e1'; return '#fde047'; }} />
 
         {/* UNIFIED VERTICAL TOP-LEFT PALETTE */}
         <Panel position="top-left" style={{ margin: '20px', zIndex: 1000 }}>
@@ -178,7 +188,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
 
             <ToolButton onClick={onBack} icon={ArrowLeft} title="Back to Dashboard" />
 
-            {/* Search Toggle (Positioned 2nd, with right-popout) */}
+            {/* Search Toggle */}
             <div style={{ position: 'relative', width: '100%' }}>
               <ToolButton
                 active={isSearchOpen}
@@ -210,17 +220,15 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
               )}
             </div>
 
-            {/* Horizontal Divider */}
             <div style={{ width: '24px', height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
 
             <ToolButton active={!isSelectMode} onClick={() => {setIsSelectMode(false); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={Hand} title="Pan Canvas" />
             <ToolButton active={isSelectMode} onClick={() => {setIsSelectMode(true); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={MousePointer2} title="Select Nodes" />
             <ToolButton onClick={() => {createStickyNote(reactFlowInstance); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={StickyNote} title="Add Sticky Note" />
 
-            {/* Horizontal Divider */}
             <div style={{ width: '24px', height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
 
-            {/* Menu Toggle (With right-popout) */}
+            {/* Menu Toggle */}
             <div style={{ position: 'relative', width: '100%' }}>
               <ToolButton
                 active={isMenuOpen}
@@ -255,6 +263,24 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
               )}
             </div>
 
+          </div>
+        </Panel>
+
+        {/* NEW VERTICAL BOTTOM-LEFT PALETTE (Custom Controls) */}
+        <Panel position="bottom-left" style={{ margin: '20px', zIndex: 1000 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '12px', boxShadow: t.shadow, border: `1px solid ${t.border}`, width: 'fit-content' }}>
+            <ToolButton onClick={() => reactFlowInstance.zoomIn()} icon={ZoomIn} title="Zoom In" />
+            <ToolButton onClick={() => reactFlowInstance.zoomOut()} icon={ZoomOut} title="Zoom Out" />
+            <ToolButton onClick={() => reactFlowInstance.fitView({ duration: 800, padding: 0.5 })} icon={Maximize} title="Fit View to Screen" />
+
+            <div style={{ width: '24px', height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
+
+            <ToolButton
+              active={isLocked}
+              onClick={() => setIsLocked(!isLocked)}
+              icon={isLocked ? Lock : Unlock}
+              title={isLocked ? "Unlock Canvas" : "Lock Canvas (Disable Pan & Zoom)"}
+            />
           </div>
         </Panel>
 
