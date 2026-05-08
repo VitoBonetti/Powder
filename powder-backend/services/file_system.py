@@ -517,11 +517,16 @@ def rename_item(old_path: str, new_name: str) -> str:
     if old_target.is_file():
         conn.execute("UPDATE search_index SET path = ? WHERE path = ?", (new_path, old_path))
         conn.execute("UPDATE note_tags SET path = ? WHERE path = ?", (new_path, old_path))
+        # --- NEW: SYNC RENAMES TO PENTESTFLOW CANVAS ---
+        conn.execute("UPDATE flow_nodes SET file_path = ? WHERE file_path = ?", (new_path, old_path))
     else:
         # If it's a folder, update ALL files inside it using string replacement
         conn.execute("UPDATE search_index SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
                      (old_path, new_path, f"{old_path}/%"))
         conn.execute("UPDATE note_tags SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
+                     (old_path, new_path, f"{old_path}/%"))
+        # --- NEW: SYNC FOLDER RENAMES TO PENTESTFLOW CANVAS ---
+        conn.execute("UPDATE flow_nodes SET file_path = REPLACE(file_path, ?, ?) WHERE file_path LIKE ?",
                      (old_path, new_path, f"{old_path}/%"))
 
     conn.commit()

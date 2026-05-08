@@ -209,6 +209,10 @@ def get_knowledge_graph(user: str = Depends(verify_access)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==============================================================================
+# POWDERFLOW INTEGRATION ROUTES
+# ==============================================================================
+
 @router.get("/flow/nodes")
 def get_flow_nodes(user: str = Depends(verify_access)):
     conn = get_db()
@@ -216,9 +220,26 @@ def get_flow_nodes(user: str = Depends(verify_access)):
     nodes = [dict(row) for row in conn.execute("SELECT * FROM flow_nodes").fetchall()]
     conn.close()
 
-    # SQLite stores JSON as strings, React Flow needs it as an object
     for n in nodes:
         n["meta_tags"] = json.loads(n["meta_tags"]) if n["meta_tags"] else {}
+
+        # FIX: READ THE ACTUAL MARKDOWN FILE TO POPULATE THE DRAWER
+        try:
+            content = file_system.read_note_content(n["file_path"])
+            if n["type"] == "stickyNote":
+                # Extract text below frontmatter
+                body = content.split("---\n\n", 1)[-1]
+                n["note"] = re.sub(r'^# .*?\n+', '', body).strip()
+            else:
+                # Extract everything after the Notes section
+                if "## Notes & Evidence\n" in content:
+                    n["markdown_result"] = content.split("## Notes & Evidence\n", 1)[-1].strip()
+                else:
+                    n["markdown_result"] = ""
+        except Exception:
+            n["markdown_result"] = ""
+            n["note"] = ""
+
     return nodes
 
 
@@ -235,29 +256,54 @@ def get_flow_edges(user: str = Depends(verify_access)):
 async def create_flow_node(request: Request, user: str = Depends(verify_access)):
     node = await request.json()
     node_id = str(uuid.uuid4())
+    short_id = node_id[:8]
 
-    # 1. THE BRIDGE: Create the dedicated Markdown file in Powder's Vault
     safe_title = re.sub(r'[^\w\s-]', '', node.get("title", "Node")).strip().replace(' ', '_')
-    file_path = f"_Flows/{safe_title}_{node_id[:8]}.md"
+    meta_tags = node.get("meta_tags", {})
+    node_type = node.get("type", "actionNode")
 
-    # Pre-populate the note with data
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+
+    # FIX & IMPROVEMENT: CREATE PROJECT FOLDERS
+    if node_type == "triggerNode":
+        # 1. Create a dedicated folder for this test
+        folder_path = f"_Flows/{safe_title}_{short_id}"
+        try:
+            file_system.create_folder(folder_path)
+        except Exception:
+            pass
+        file_path = f"{folder_path}/_Scope.md"
+    else:
+        # 2. Put action nodes inside their parent test's folder
+        engagement_id = meta_tags.get("engagement_id")
+        parent_folder = "_Flows"
+        if engagement_id:
+            cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (engagement_id,))
+            parent_row = cursor.fetchone()
+            if parent_row:
+                # Extract the folder path from the parent's file path
+                parent_folder = parent_row["file_path"].rsplit('/', 1)[0]
+
+        file_path = f"{parent_folder}/{safe_title}_{short_id}.md"
+
+    # Pre-populate the note
     command = node.get("command", "")
     status = node.get("status", "action")
-    initial_content = f"---\ntype: flow-node\nstatus: {status}\n---\n\n# {node.get('title', 'Node')}\n\n"
-    if command:
-        initial_content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n## Notes\n"
+    initial_content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {node.get('title', 'Node')}\n\n"
+    if node_type != "stickyNote":
+        if command:
+            initial_content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
+        initial_content += "## Notes & Evidence\n"
 
     file_system.save_note_content(file_path, initial_content)
 
-    meta_tags = node.get("meta_tags", {})
-
-    # 2. THE POINTER: Save the graph node to SQLite
-    conn = get_db()
+    # Save the pointer to SQLite
     conn.execute("""
         INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        node_id, node.get("title"), node.get("type"), command, status,
+        node_id, node.get("title"), node_type, command, status,
         node.get("position_x", 0), node.get("position_y", 0), file_path, json.dumps(meta_tags)
     ))
     conn.commit()
@@ -274,7 +320,6 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
     conn = get_db()
     conn.row_factory = sqlite3.Row
 
-    # 1. Fetch the current node state
     cursor = conn.execute("SELECT title, file_path FROM flow_nodes WHERE id=?", (node_id,))
     current_node = cursor.fetchone()
     if not current_node:
@@ -285,26 +330,26 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
     file_path = current_node["file_path"]
     new_title = node.get("title", current_title)
 
-    # --- BUG 1 FIX: Handle File Renaming ---
+    # HANDLE FILE RENAMING FROM CANVAS
     if new_title != current_title:
         safe_title = re.sub(r'[^\w\s-]', '', new_title).strip().replace(' ', '_')
+        # Keep it in the same folder, just change the filename
+        folder_path = file_path.rsplit('/', 1)[0]
         new_filename = f"{safe_title}_{node_id[:8]}.md"
         try:
-            # This physically renames the file and updates Powder's global search index
+            # We must pass the old full path, and the new ONLY filename
             file_path = file_system.rename_item(file_path, new_filename)
         except Exception as e:
             print(f"Rename failed: {e}")
 
-    # --- BUG 4 FIX: Reconstruct and Save the Markdown Content ---
+    # RECONSTRUCT AND SAVE THE MARKDOWN
     node_type = node.get("type", "actionNode")
     status = node.get("status", "action")
     command = node.get("command", "")
     markdown_result = node.get("markdown_result", "")
-    note_text = node.get("note", "")  # Used by sticky notes
+    note_text = node.get("note", "")
 
-    # Build the Frontmatter and Title
     content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {new_title}\n\n"
-
     if node_type == "stickyNote":
         content += note_text
     else:
@@ -312,10 +357,9 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
             content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
         content += f"## Notes & Evidence\n{markdown_result}"
 
-    # Write the actual file to the Vault
     file_system.save_note_content(file_path, content)
 
-    # 3. Update the Pointer Database
+    # Update Database
     conn.execute("""
         UPDATE flow_nodes 
         SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=?
@@ -328,7 +372,6 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
     conn.commit()
     conn.close()
 
-    # Return the updated file_path so the frontend knows the new location
     node["file_path"] = file_path
     return node
 
@@ -336,18 +379,49 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
 @router.delete("/flow/nodes/{node_id}")
 def delete_flow_node(node_id: str, user: str = Depends(verify_access)):
     conn = get_db()
+    conn.row_factory = sqlite3.Row
 
-    # First, get the file_path to delete the markdown file from the Vault
-    cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (node_id,))
+    cursor = conn.execute("SELECT type, file_path FROM flow_nodes WHERE id=?", (node_id,))
     row = cursor.fetchone()
-    if row and row[0]:
-        try:
-            file_system.delete_item(row[0])
-        except Exception:
-            pass  # File might already be gone
+    if not row:
+        conn.close()
+        return {"status": "already_deleted"}
 
-    conn.execute("DELETE FROM flow_nodes WHERE id=?", (node_id,))
-    conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (node_id, node_id))
+    node_type = row["type"]
+    file_path = row["file_path"]
+
+    # FIX: DEEP DELETION FOR ENTIRE PROJECTS
+    if node_type == "triggerNode":
+        # 1. Delete the entire folder from the Vault
+        folder_path = file_path.rsplit('/', 1)[0]
+        try:
+            file_system.delete_item(folder_path)
+        except Exception as e:
+            print(f"Failed to delete folder: {e}")
+
+        # 2. Find all child nodes to delete from SQLite
+        cursor = conn.execute("SELECT id, meta_tags FROM flow_nodes")
+        to_delete = [node_id]
+        for r in cursor.fetchall():
+            try:
+                mt = json.loads(r["meta_tags"])
+                if mt.get("engagement_id") == node_id:
+                    to_delete.append(r["id"])
+            except Exception:
+                pass
+
+        for tid in to_delete:
+            conn.execute("DELETE FROM flow_nodes WHERE id=?", (tid,))
+            conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (tid, tid))
+    else:
+        # Standard single node deletion
+        try:
+            file_system.delete_item(file_path)
+        except Exception:
+            pass
+        conn.execute("DELETE FROM flow_nodes WHERE id=?", (node_id,))
+        conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (node_id, node_id))
+
     conn.commit()
     conn.close()
     return {"status": "deleted"}
@@ -357,10 +431,8 @@ def delete_flow_node(node_id: str, user: str = Depends(verify_access)):
 async def create_flow_edge(request: Request, user: str = Depends(verify_access)):
     edge = await request.json()
     conn = get_db()
-    conn.execute("""
-        INSERT INTO flow_edges (id, source, target, label) 
-        VALUES (?, ?, ?, ?)
-    """, (edge["id"], edge["source"], edge["target"], edge.get("label", "")))
+    conn.execute("INSERT INTO flow_edges (id, source, target, label) VALUES (?, ?, ?, ?)",
+                 (edge["id"], edge["source"], edge["target"], edge.get("label", "")))
     conn.commit()
     conn.close()
     return edge
@@ -385,46 +457,34 @@ def delete_flow_edge(edge_id: str, user: str = Depends(verify_access)):
     return {"status": "deleted"}
 
 
-# --- File and Image Uploads within the Drawer ---
 @router.post("/flow/upload/")
 async def upload_flow_image(file: UploadFile = File(...), user: str = Depends(verify_access)):
-
-    assets_dir = VAULT_DIR / "assets"
-    assets_dir.mkdir(exist_ok=True)
-
-    file_path = assets_dir / file.filename
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    return {"url": f"/assets/{file.filename}"}
+    content = await file.read()
+    path = file_system.save_asset(file.filename, content)
+    return {"url": f"/{path}"}  # Fixed: Prepend / so Markdown renders it correctly
 
 
 @router.post("/flow/nodes/{node_id}/parse")
 async def parse_scan_file(node_id: str, file: UploadFile = File(...), user: str = Depends(verify_access)):
     try:
-        # 1. Read bytes and safely decode to string (Your parsers expect a string)
+        from parser import route_and_parse
+
         raw_content = await file.read()
         try:
             content_str = raw_content.decode("utf-8")
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="File must be a valid UTF-8 encoded text/xml/json file.")
+            raise HTTPException(status_code=400, detail="File must be a valid text file.")
 
-        # 2. Execute your exact PentestFlow parser logic (returns a dict)
         parsed_data = route_and_parse(content_str)
 
-        # 3. Format the dictionary exactly as ResultDrawer.jsx expects it
         return {
             "markdown_result": parsed_data.get("markdown", parsed_data.get("markdown_result", "")),
             "title": parsed_data.get("title", "Parsed Scan"),
             "command": parsed_data.get("command", "")
         }
-
     except ImportError:
-        raise HTTPException(status_code=501,
-                            detail="Parser folder not found. Please copy the 'parser' folder from PentestFlow into powder-backend.")
+        raise HTTPException(status_code=501, detail="Parser folder not found.")
     except ValueError as ve:
-        # This catches the exact "Unrecognized tool format" error from your __init__.py
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Parsing error: {str(e)}")
-
