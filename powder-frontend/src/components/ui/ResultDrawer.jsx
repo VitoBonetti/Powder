@@ -3,19 +3,18 @@ import toast from 'react-hot-toast';
 import MDEditor from '@uiw/react-md-editor';
 import { getApiUrl } from '../../config';
 
-export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDeleteNode, onExportNode }) {
+// ADDED theme PROP HERE
+export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDeleteNode, onExportNode, theme = 'dark' }) {
   const [formData, setFormData] = useState({
     title: '', command: '', status: 'action', markdown_result: '', meta_tags: {}
   });
 
   const scanInputRef = useRef(null);
   const fileInputRef = useRef(null);
-  const textareaRef = useRef(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const prevNodeId = useRef(null);
 
-  // Native fetch wrapper
   const apiCall = async (endpoint, method = 'GET', body = null) => {
     const options = {
       method,
@@ -42,7 +41,6 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
     }
   }, [selectedNode]);
 
-  // Debounced Autosave
   useEffect(() => {
     if (!isDirty || !selectedNode) return;
     const timerId = setTimeout(async () => {
@@ -108,12 +106,10 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
     uploadData.append('file', file);
     const toastId = toast.loading('Uploading image...');
     try {
-      // 1. Hit the new node-specific upload route
       const res = await fetch(getApiUrl(`/flow/nodes/${selectedNode.id}/upload`), { method: 'POST', body: uploadData, credentials: 'include' });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
 
-      // 2. Use getApiUrl so the Markdown editor can fetch the absolute path from the backend
       const imageUrl = getApiUrl(`/flow/images/${data.path}`);
       const imageMarkdown = `\n\n![Evidence Attachment](${imageUrl})\n\n`;
       let newText = formData.markdown_result + imageMarkdown;
@@ -160,31 +156,66 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
   if (!selectedNode) return null;
   const isTrigger = selectedNode.type === 'triggerNode';
 
+  // --- THEME DICTIONARY ---
+  const t = theme === 'dark' ? {
+    bg: '#0d1117',
+    panelBg: '#161b22',
+    border: '#30363d',
+    text: '#c9d1d9',
+    textMuted: '#8b949e',
+    inputBg: '#010409',
+    inputBorder: '#30363d',
+    accent: '#38bdf8',
+    accentBg: 'rgba(56, 189, 248, 0.1)',
+    dangerText: '#f85149',
+    dangerBorder: '#b31d28',
+    dangerBg: 'rgba(248, 81, 73, 0.1)',
+    tagBg: '#21262d',
+    overlay: 'rgba(0, 0, 0, 0.7)'
+  } : {
+    bg: '#f8fafc',
+    panelBg: '#ffffff',
+    border: '#e2e8f0',
+    text: '#0f172a',
+    textMuted: '#64748b',
+    inputBg: '#f8fafc',
+    inputBorder: '#cbd5e1',
+    accent: '#0ea5e9',
+    accentBg: '#e0f2fe',
+    dangerText: '#ef4444',
+    dangerBorder: '#fca5a5',
+    dangerBg: '#fef2f2',
+    tagBg: '#f1f5f9',
+    overlay: 'rgba(15, 23, 42, 0.4)'
+  };
+
   // --- STYLES ---
-  const inputStyle = { width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#0f172a', marginBottom: '12px', fontSize: '13px', boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' };
-  const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '12px', color: '#475569', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' };
-  const btnStyle = { backgroundColor: '#ffffff', color: '#0ea5e9', border: '1px solid #bae6fd', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', transition: 'background-color 0.2s' };
-  const cardStyle = { backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' };
-  const sectionHeaderStyle = { fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '16px', paddingLeft: '8px', borderLeft: '3px solid #0ea5e9', lineHeight: '1' };
-  const tagStyle = { background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: '#334155', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' };
-  const copyBtnStyle = { background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', padding: '2px', fontSize: '14px' };
+  const inputStyle = { width: '100%', padding: '10px 12px', borderRadius: '6px', border: `1px solid ${t.inputBorder}`, backgroundColor: t.inputBg, color: t.text, marginBottom: '12px', fontSize: '13px', boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' };
+  const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '12px', color: t.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const btnStyle = { backgroundColor: t.panelBg, color: t.accent, border: `1px solid ${t.border}`, padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', transition: 'background-color 0.2s' };
+  const cardStyle = { backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' };
+  const sectionHeaderStyle = { fontSize: '14px', fontWeight: '700', color: t.text, marginBottom: '16px', paddingLeft: '8px', borderLeft: `3px solid ${t.accent}`, lineHeight: '1' };
+  const tagStyle = { background: t.tagBg, padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: t.text, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: '6px' };
+  const copyBtnStyle = { background: 'transparent', border: 'none', cursor: 'pointer', color: t.textMuted, display: 'flex', alignItems: 'center', padding: '2px', fontSize: '14px' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 9999, display: 'flex', justifyContent: 'flex-end', fontFamily: 'system-ui, sans-serif' }} onClick={() => { prevNodeId.current = null; onClose(); }}>
-      <div style={{ width: '90vw', maxWidth: '1200px', height: '100vh', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0, 0, 0, 0.1)' }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: t.overlay, zIndex: 9999, display: 'flex', justifyContent: 'flex-end', fontFamily: 'system-ui, sans-serif' }} onClick={() => { prevNodeId.current = null; onClose(); }}>
+      <div style={{ width: '90vw', maxWidth: '1200px', height: '100vh', backgroundColor: t.bg, display: 'flex', flexDirection: 'column', boxShadow: '-5px 0 25px rgba(0, 0, 0, 0.3)' }} onClick={(e) => e.stopPropagation()}>
+
         {/* HEADER */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.panelBg }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '20px', color: '#0f172a', fontWeight: '800' }}>{isTrigger ? 'Engagement Scope' : 'Action Node'}</h2>
-            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{isTrigger ? formData.meta_tags.test_type : 'Edit execution details and findings'}</span>
+            <h2 style={{ margin: 0, fontSize: '20px', color: t.text, fontWeight: '800' }}>{isTrigger ? 'Engagement Scope' : 'Action Node'}</h2>
+            <span style={{ fontSize: '12px', color: t.textMuted, fontWeight: '500' }}>{isTrigger ? formData.meta_tags.test_type : 'Edit execution details and findings'}</span>
           </div>
-          <button onClick={() => { prevNodeId.current = null; onClose(); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '24px', cursor: 'pointer', padding: '4px' }}>✕</button>
+          <button onClick={() => { prevNodeId.current = null; onClose(); }} style={{ background: 'transparent', border: 'none', color: t.textMuted, fontSize: '24px', cursor: 'pointer', padding: '4px' }}>✕</button>
         </div>
 
         {/* MAIN LAYOUT */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
           {/* LEFT COLUMN: Organized Cards */}
-          <div style={{ width: '420px', padding: '20px', overflowY: 'auto', borderRight: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+          <div style={{ width: '420px', padding: '20px', overflowY: 'auto', borderRight: `1px solid ${t.border}`, backgroundColor: t.bg }}>
             {/* GENERAL CARD */}
             <div style={cardStyle}>
               <div style={sectionHeaderStyle}>General Information</div>
@@ -233,8 +264,8 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                   <div style={sectionHeaderStyle}>Target Infrastructure</div>
                   {(formData.meta_tags.vpn || formData.meta_tags.infrastructure) && (
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                      {formData.meta_tags.vpn && <span style={{ background: '#fee2e2', color: '#ef4444', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', border: '1px solid #fecaca' }}>VPN REQUIRED</span>}
-                      {formData.meta_tags.infrastructure && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', border: '1px solid #bae6fd' }}>INFRA: {formData.meta_tags.infrastructure}</span>}
+                      {formData.meta_tags.vpn && <span style={{ background: t.dangerBg, color: t.dangerText, padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', border: `1px solid ${t.dangerBorder}` }}>VPN REQUIRED</span>}
+                      {formData.meta_tags.infrastructure && <span style={{ background: t.accentBg, color: t.accent, padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', border: `1px solid ${t.border}` }}>INFRA: {formData.meta_tags.infrastructure}</span>}
                     </div>
                   )}
                   {formData.meta_tags.urls && formData.meta_tags.urls.length > 0 && (
@@ -242,7 +273,7 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                       <label style={labelStyle}>Target URLs</label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {formData.meta_tags.urls.map((url, i) => (
-                          <div key={i} style={tagStyle}><a href={url.startsWith('http') ? url : `http://${url}`} target="_blank" rel="noopener noreferrer" style={{ color: '#0ea5e9', textDecoration: 'none', fontWeight: '600' }}>{url}</a><button onClick={() => handleCopy(url, 'URL')} style={copyBtnStyle}>⎘</button></div>
+                          <div key={i} style={tagStyle}><a href={url.startsWith('http') ? url : `http://${url}`} target="_blank" rel="noopener noreferrer" style={{ color: t.accent, textDecoration: 'none', fontWeight: '600' }}>{url}</a><button onClick={() => handleCopy(url, 'URL')} style={copyBtnStyle}>⎘</button></div>
                         ))}
                       </div>
                     </div>
@@ -262,27 +293,27 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                   <div style={cardStyle}>
                     <div style={sectionHeaderStyle}>Provided Assets</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {formData.meta_tags.code_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><a href={formData.meta_tags.code_location} target="_blank" rel="noopener noreferrer" style={{ color: '#16a34a', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Code Repository</a><button onClick={() => handleCopy(formData.meta_tags.code_location, 'Code Link')} style={copyBtnStyle}>⎘</button></div>}
-                      {formData.meta_tags.docs_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><a href={formData.meta_tags.docs_location} target="_blank" rel="noopener noreferrer" style={{ color: '#16a34a', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Documentation</a><button onClick={() => handleCopy(formData.meta_tags.docs_location, 'Docs Link')} style={copyBtnStyle}>⎘</button></div>}
-                      {formData.meta_tags.apk_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><a href={formData.meta_tags.apk_location} target="_blank" rel="noopener noreferrer" style={{ color: '#d97706', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Android (APK)</a><button onClick={() => handleCopy(formData.meta_tags.apk_location, 'APK Link')} style={copyBtnStyle}>⎘</button></div>}
-                      {formData.meta_tags.ipa_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><a href={formData.meta_tags.ipa_location} target="_blank" rel="noopener noreferrer" style={{ color: '#d97706', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ iOS (IPA)</a><button onClick={() => handleCopy(formData.meta_tags.ipa_location, 'IPA Link')} style={copyBtnStyle}>⎘</button></div>}
+                      {formData.meta_tags.code_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: t.tagBg, padding: '8px', borderRadius: '6px', border: `1px solid ${t.border}` }}><a href={formData.meta_tags.code_location} target="_blank" rel="noopener noreferrer" style={{ color: '#16a34a', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Code Repository</a><button onClick={() => handleCopy(formData.meta_tags.code_location, 'Code Link')} style={copyBtnStyle}>⎘</button></div>}
+                      {formData.meta_tags.docs_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: t.tagBg, padding: '8px', borderRadius: '6px', border: `1px solid ${t.border}` }}><a href={formData.meta_tags.docs_location} target="_blank" rel="noopener noreferrer" style={{ color: '#16a34a', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Documentation</a><button onClick={() => handleCopy(formData.meta_tags.docs_location, 'Docs Link')} style={copyBtnStyle}>⎘</button></div>}
+                      {formData.meta_tags.apk_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: t.tagBg, padding: '8px', borderRadius: '6px', border: `1px solid ${t.border}` }}><a href={formData.meta_tags.apk_location} target="_blank" rel="noopener noreferrer" style={{ color: '#d97706', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ Android (APK)</a><button onClick={() => handleCopy(formData.meta_tags.apk_location, 'APK Link')} style={copyBtnStyle}>⎘</button></div>}
+                      {formData.meta_tags.ipa_location && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: t.tagBg, padding: '8px', borderRadius: '6px', border: `1px solid ${t.border}` }}><a href={formData.meta_tags.ipa_location} target="_blank" rel="noopener noreferrer" style={{ color: '#d97706', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>↗ iOS (IPA)</a><button onClick={() => handleCopy(formData.meta_tags.ipa_location, 'IPA Link')} style={copyBtnStyle}>⎘</button></div>}
                     </div>
                   </div>
                 )}
                 <div style={cardStyle}>
-                  <div style={{...sectionHeaderStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}><span>Credentials & Roles</span><span style={{fontSize: '11px', fontWeight: '500', color: '#94a3b8', borderLeft: 'none', paddingLeft: 0}}>{(formData.meta_tags.roles_credentials || []).length} sets</span></div>
+                  <div style={{...sectionHeaderStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}><span>Credentials & Roles</span><span style={{fontSize: '11px', fontWeight: '500', color: t.textMuted, borderLeft: 'none', paddingLeft: 0}}>{(formData.meta_tags.roles_credentials || []).length} sets</span></div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {(formData.meta_tags.roles_credentials || []).map((rc, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1.5fr auto auto', gap: '6px', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', alignItems: 'center' }}>
-                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: '#ffffff'}} placeholder="Role" value={rc.role || ''} onChange={(e) => handleCredentialChange(idx, 'role', e.target.value)} />
-                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: '#ffffff'}} placeholder="Username" value={rc.user || ''} onChange={(e) => handleCredentialChange(idx, 'user', e.target.value)} />
-                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: '#ffffff'}} placeholder="Password" value={rc.password || ''} onChange={(e) => handleCredentialChange(idx, 'password', e.target.value)} />
-                        <button onClick={() => handleCopy(`${rc.user}:${rc.password}`, 'Credentials')} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', cursor: 'pointer', height: '34px', width: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px' }}>⎘</button>
-                        <button onClick={() => removeCredential(idx)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer', height: '34px', width: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1.5fr auto auto', gap: '6px', background: t.bg, padding: '10px', borderRadius: '8px', border: `1px solid ${t.border}`, alignItems: 'center' }}>
+                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: t.panelBg}} placeholder="Role" value={rc.role || ''} onChange={(e) => handleCredentialChange(idx, 'role', e.target.value)} />
+                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: t.panelBg}} placeholder="Username" value={rc.user || ''} onChange={(e) => handleCredentialChange(idx, 'user', e.target.value)} />
+                        <input style={{...inputStyle, marginBottom: 0, padding: '8px', background: t.panelBg}} placeholder="Password" value={rc.password || ''} onChange={(e) => handleCredentialChange(idx, 'password', e.target.value)} />
+                        <button onClick={() => handleCopy(`${rc.user}:${rc.password}`, 'Credentials')} style={{ background: t.accentBg, color: t.accent, border: 'none', borderRadius: '6px', cursor: 'pointer', height: '34px', width: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px' }}>⎘</button>
+                        <button onClick={() => removeCredential(idx)} style={{ background: t.dangerBg, color: t.dangerText, border: 'none', borderRadius: '6px', cursor: 'pointer', height: '34px', width: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={addCredential} style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', marginTop: '8px', fontWeight: '600', width: '100%', transition: 'background-color 0.2s' }}>+ Add New Credential</button>
+                  <button onClick={addCredential} style={{ background: t.tagBg, color: t.text, border: `1px solid ${t.border}`, padding: '10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', marginTop: '8px', fontWeight: '600', width: '100%', transition: 'background-color 0.2s' }}>+ Add New Credential</button>
                 </div>
               </>
             )}
@@ -295,10 +326,10 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                   <label style={labelStyle}>Command / Payload Used</label>
                   <textarea style={{...inputStyle, height: '90px', resize: 'vertical', fontFamily: 'monospace', marginBottom: 0}} name="command" placeholder="$ nmap -sC -sV ..." value={formData.command} onChange={handleChange} />
                 </div>
-                <div style={{...cardStyle, borderColor: formData.status === 'vulnerability' ? '#fca5a5' : '#e2e8f0', background: formData.status === 'vulnerability' ? '#fef2f2' : '#ffffff'}}>
-                  <div style={{...sectionHeaderStyle, borderLeftColor: formData.status === 'vulnerability' ? '#ef4444' : '#0ea5e9'}}>Reporting & Vulnerability</div>
+                <div style={{...cardStyle, borderColor: formData.status === 'vulnerability' ? t.dangerBorder : t.border, background: formData.status === 'vulnerability' ? t.dangerBg : t.panelBg}}>
+                  <div style={{...sectionHeaderStyle, borderLeftColor: formData.status === 'vulnerability' ? t.dangerText : t.accent}}>Reporting & Vulnerability</div>
                   <label style={labelStyle}>Severity Level</label>
-                  <select style={{...inputStyle, background: '#ffffff'}} value={formData.meta_tags.severity || ''} onChange={(e) => handleMetaChange('severity', e.target.value)}>
+                  <select style={{...inputStyle, background: t.panelBg}} value={formData.meta_tags.severity || ''} onChange={(e) => handleMetaChange('severity', e.target.value)}>
                     <option value="">None / Unrated</option>
                     <option value="info">Info</option>
                     <option value="low">Low</option>
@@ -306,7 +337,7 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
                   </select>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#334155', fontSize: '13px', fontWeight: '600', marginTop: '8px', padding: '8px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: t.text, fontSize: '13px', fontWeight: '600', marginTop: '8px', padding: '8px', background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '6px' }}>
                     <input type="checkbox" checked={formData.meta_tags.published || false} onChange={(e) => handleMetaChange('published', e.target.checked)} style={{ marginRight: '10px', width: '16px', height: '16px', accentColor: '#0ea5e9' }} />
                     Include in Final Report
                   </label>
@@ -316,11 +347,11 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
           </div>
 
           {/* RIGHT COLUMN: Markdown Editor */}
-          <div style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff' }}>
+          <div style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', backgroundColor: t.panelBg }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a', fontWeight: '700' }}>{isTrigger ? 'General Notes' : 'Terminal Output & Evidence'}</h3>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Supports standard Markdown format</span>
+                <h3 style={{ margin: 0, fontSize: '16px', color: t.text, fontWeight: '700' }}>{isTrigger ? 'General Notes' : 'Terminal Output & Evidence'}</h3>
+                <span style={{ fontSize: '12px', color: t.textMuted }}>Supports standard Markdown format</span>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImageUpload} accept="image/*" />
@@ -332,18 +363,20 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                 </button>
               </div>
             </div>
-            <div data-color-mode="light" style={{ flex: 1, overflow: 'hidden' }}>
-              <MDEditor value={formData.markdown_result} onChange={(val) => { setFormData(prev => ({ ...prev, markdown_result: val || '' })); setIsDirty(true); }} height="100%" preview="edit" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: 'none' }} />
+
+            {/* ADDED theme TO data-color-mode */}
+            <div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden' }}>
+              <MDEditor value={formData.markdown_result} onChange={(val) => { setFormData(prev => ({ ...prev, markdown_result: val || '' })); setIsDirty(true); }} height="100%" preview="edit" style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, boxShadow: 'none' }} />
             </div>
           </div>
         </div>
 
         {/* FOOTER */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', backgroundColor: '#ffffff', display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
-          {isSaving && <span style={{ fontSize: '12px', color: '#64748b', marginRight: 'auto' }}>Saving changes...</span>}
-          {!isTrigger && <button onClick={() => onDeleteNode(selectedNode.id)} style={{ padding: '10px 20px', backgroundColor: '#ffffff', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', marginRight: 'auto' }}>Delete Node</button>}
-          <button onClick={() => onExportNode(selectedNode.id, formData.title)} style={{ padding: '10px 20px', backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>Export PDF</button>
-          <button onClick={() => { prevNodeId.current = null; onClose(); }} style={{ padding: '10px 20px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Close</button>
+        <div style={{ padding: '16px 24px', borderTop: `1px solid ${t.border}`, backgroundColor: t.panelBg, display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {isSaving && <span style={{ fontSize: '12px', color: t.textMuted, marginRight: 'auto' }}>Saving changes...</span>}
+          {!isTrigger && <button onClick={() => onDeleteNode(selectedNode.id)} style={{ padding: '10px 20px', backgroundColor: t.dangerBg, color: t.dangerText, border: `1px solid ${t.dangerBorder}`, borderRadius: '6px', cursor: 'pointer', fontWeight: '700', marginRight: 'auto' }}>Delete Node</button>}
+          <button onClick={() => onExportNode(selectedNode.id, formData.title)} style={{ padding: '10px 20px', backgroundColor: t.accentBg, color: t.accent, border: `1px solid ${t.border}`, borderRadius: '6px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>Export PDF</button>
+          <button onClick={() => { prevNodeId.current = null; onClose(); }} style={{ padding: '10px 20px', backgroundColor: t.tagBg, color: t.text, border: `1px solid ${t.border}`, borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Close</button>
           <button onClick={handleSave} disabled={isSaving} style={{ padding: '10px 24px', backgroundColor: '#0ea5e9', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: isSaving ? 'not-allowed' : 'pointer', fontWeight: '700', boxShadow: '0 2px 4px rgba(14,165,233,0.3)' }}>Manual Save</button>
         </div>
       </div>

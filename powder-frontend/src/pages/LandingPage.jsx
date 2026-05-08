@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { getApiUrl } from '../config';
 import { useProjectImport } from '../hooks/useProjectImport';
 
-export default function LandingPage({ onSelectEngagement, onFlowChange }) {
+export default function LandingPage({ onSelectEngagement, onFlowChange, theme }) {
   const [recentEngagements, setRecentEngagements] = useState([]);
   const [engagementName, setEngagementName] = useState('');
   const [testType, setTestType] = useState('Adversary Simulation');
@@ -81,7 +81,7 @@ export default function LandingPage({ onSelectEngagement, onFlowChange }) {
         }
       });
       toast.success('Engagement created!');
-      if (onFlowChange) onFlowChange(); // SYNC BRIDGE
+      if (onFlowChange) onFlowChange();
       onSelectEngagement(response.id);
     } catch (error) { toast.error('Failed to create engagement.'); }
   };
@@ -96,148 +96,159 @@ export default function LandingPage({ onSelectEngagement, onFlowChange }) {
       await apiCall(`/flow/nodes/${deleteModal.id}`, 'DELETE');
       setRecentEngagements(prev => prev.filter(eng => eng.id !== deleteModal.id));
       toast.success('Engagement deleted');
-      if (onFlowChange) onFlowChange(); // SYNC BRIDGE
+      if (onFlowChange) onFlowChange();
       setDeleteModal({ isOpen: false, id: null, title: '' });
     } catch (error) { toast.error('Failed to delete.'); }
   };
 
-  const pageStyle = { display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minHeight: '100vh', backgroundColor: '#f8fafc', color: '#334155', fontFamily: 'system-ui, sans-serif', padding: '40px', gap: '40px', position: 'relative' };
-  const cardStyle = { backgroundColor: '#ffffff', padding: '40px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)' };
-  const inputStyle = { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#0f172a', boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' };
-  const labelStyle = { display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#475569' };
-  const fieldContainer = { marginBottom: '20px' };
-  const listContainerStyle = { backgroundColor: '#f1f5f9', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' };
+  // --- Reusable Tailwind Classes ---
+  const inputClass = "w-full p-3 rounded-md border border-slate-300 dark:border-gray-700 bg-slate-50 dark:bg-gray-900 text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:focus:ring-blue-500 transition-colors";
+  const labelClass = "block mb-2 text-sm font-semibold text-slate-600 dark:text-gray-400";
+  const listContainerClass = "bg-slate-100 dark:bg-gray-800/50 p-4 rounded-lg mb-5 border border-slate-200 dark:border-gray-700 transition-colors";
 
   const renderDynamicList = (title, list, setter, placeholder) => (
-    <div style={listContainerStyle}>
-      <label style={labelStyle}>{title}</label>
+    <div className={listContainerClass}>
+      <label className={labelClass}>{title}</label>
       {list.map((item, index) => (
-        <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-          <input type="text" placeholder={placeholder} value={item} onChange={(e) => handleListChange(setter, index, e.target.value)} style={{...inputStyle, padding: '10px'}} />
-          {list.length > 1 && <button type="button" onClick={() => removeListRow(setter, index)} style={{ backgroundColor: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', padding: '0 12px', fontWeight: 'bold' }}>X</button>}
+        <div key={index} className="flex gap-2 mb-2.5">
+          <input type="text" placeholder={placeholder} value={item} onChange={(e) => handleListChange(setter, index, e.target.value)} className={inputClass} />
+          {list.length > 1 && (
+            <button type="button" onClick={() => removeListRow(setter, index)} className="bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-md px-3 font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors">X</button>
+          )}
         </div>
       ))}
-      <button type="button" onClick={() => addListRow(setter)} style={{ backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>+ Add Another</button>
+      <button type="button" onClick={() => addListRow(setter)} className="bg-slate-200 dark:bg-gray-700 text-slate-600 dark:text-gray-300 border-none rounded-md px-4 py-2 text-sm font-semibold hover:bg-slate-300 dark:hover:bg-gray-600 transition-colors">+ Add Another</button>
     </div>
   );
 
   const renderRolesList = () => (
-    <div style={listContainerStyle}>
-      <label style={labelStyle}>Roles & Credentials Provided</label>
+    <div className={listContainerClass}>
+      <label className={labelClass}>Roles & Credentials Provided</label>
       {rolesList.map((row, index) => (
-        <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-          <input type="text" placeholder="Role" value={row.role} onChange={(e) => handleRoleChange(index, 'role', e.target.value)} style={{...inputStyle, padding: '10px'}} />
-          <input type="text" placeholder="Username" value={row.user} onChange={(e) => handleRoleChange(index, 'user', e.target.value)} style={{...inputStyle, padding: '10px'}} />
-          <input type="text" placeholder="Password" value={row.password} onChange={(e) => handleRoleChange(index, 'password', e.target.value)} style={{...inputStyle, padding: '10px'}} />
-          {rolesList.length > 1 && <button type="button" onClick={() => removeRoleRow(index)} style={{ backgroundColor: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', padding: '0 12px', fontWeight: 'bold' }}>X</button>}
+        <div key={index} className="flex gap-2 mb-2.5">
+          <input type="text" placeholder="Role" value={row.role} onChange={(e) => handleRoleChange(index, 'role', e.target.value)} className={inputClass} />
+          <input type="text" placeholder="Username" value={row.user} onChange={(e) => handleRoleChange(index, 'user', e.target.value)} className={inputClass} />
+          <input type="text" placeholder="Password" value={row.password} onChange={(e) => handleRoleChange(index, 'password', e.target.value)} className={inputClass} />
+          {rolesList.length > 1 && (
+            <button type="button" onClick={() => removeRoleRow(index)} className="bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-md px-3 font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors">X</button>
+          )}
         </div>
       ))}
-      <button type="button" onClick={addRoleRow} style={{ backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>+ Add Another Role</button>
+      <button type="button" onClick={addRoleRow} className="bg-slate-200 dark:bg-gray-700 text-slate-600 dark:text-gray-300 border-none rounded-md px-4 py-2 text-sm font-semibold hover:bg-slate-300 dark:hover:bg-gray-600 transition-colors">+ Add Another Role</button>
     </div>
   );
 
   return (
-    <div style={pageStyle}>
+    <div className="min-h-screen flex justify-center items-start bg-slate-50 dark:bg-[#0d1117] text-slate-800 dark:text-gray-200 p-10 gap-10 font-sans transition-colors duration-200">
+
+      {/* DELETE MODAL */}
       {deleteModal.isOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#ffffff', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-            <h3 style={{ marginTop: 0, color: '#ef4444', fontSize: '20px' }}>Delete Engagement?</h3>
-            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5' }}>
-              Are you sure you want to delete <strong>{deleteModal.title}</strong>? All nodes and findings attached to this project will be permanently lost.
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 flex justify-center items-center z-[1000] backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#161b22] p-8 rounded-xl w-[400px] shadow-2xl border border-transparent dark:border-gray-800">
+            <h3 className="mt-0 text-red-500 dark:text-red-400 text-xl font-bold mb-3">Delete Engagement?</h3>
+            <p className="text-slate-600 dark:text-gray-400 text-sm leading-relaxed mb-6">
+              Are you sure you want to delete <strong className="text-slate-900 dark:text-white">{deleteModal.title}</strong>? All nodes and findings attached to this project will be permanently lost.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '25px' }}>
-              <button onClick={() => setDeleteModal({ isOpen: false, id: null, title: '' })} style={{ padding: '10px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#475569', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
-              <button onClick={confirmDelete} style={{ padding: '10px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', cursor: 'pointer', fontWeight: 'bold' }}>Delete</button>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteModal({ isOpen: false, id: null, title: '' })} className="px-4 py-2 rounded-md border border-slate-300 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 text-slate-600 dark:text-gray-300 font-semibold hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={confirmDelete} className="px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white font-bold transition-colors">Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ ...cardStyle, width: '400px', flexShrink: 0 }}>
-        <h1 style={{ marginTop: 0, color: '#0f172a', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', fontSize: '22px' }}>Recent Engagements</h1>
+      {/* LEFT COLUMN: RECENT ENGAGEMENTS */}
+      <div className="bg-white dark:bg-[#161b22] p-8 rounded-xl border border-slate-200 dark:border-gray-800 shadow-sm w-[400px] shrink-0 transition-colors">
+        <h1 className="mt-0 text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-gray-800 pb-4 text-2xl font-bold mb-6">Recent Engagements</h1>
 
-        <input type="file" ref={importFileRef} style={{ display: 'none' }} onChange={handleImportZip} accept=".zip" />
-        <button onClick={() => importFileRef.current.click()} style={{ width: '100%', backgroundColor: '#f1f5f9', color: '#0ea5e9', border: '1px dashed #bae6fd', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '20px', transition: 'background-color 0.2s' }}>
+        <input type="file" ref={importFileRef} className="hidden" onChange={handleImportZip} accept=".zip" />
+        <button onClick={() => importFileRef.current.click()} className="w-full bg-sky-50 dark:bg-blue-900/20 text-sky-600 dark:text-blue-400 border border-dashed border-sky-200 dark:border-blue-800/50 p-3 rounded-lg font-bold cursor-pointer mb-6 hover:bg-sky-100 dark:hover:bg-blue-900/40 transition-colors">
           ⬇️ Import Existing Project (ZIP)
         </button>
 
         {recentEngagements.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', marginTop: '40px' }}>No previous engagements found.</p>
+          <p className="text-slate-500 dark:text-gray-500 text-sm text-center mt-10">No previous engagements found.</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="flex flex-col gap-3">
             {recentEngagements.map(engagement => (
-              <div key={engagement.id} onClick={() => onSelectEngagement(engagement.id)} style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '8px', cursor: 'pointer', borderLeft: '4px solid #0ea5e9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ flex: 1, overflow: 'hidden', paddingRight: '10px' }}>
-                  <div style={{ fontWeight: '700', fontSize: '15px', color: '#1e293b', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{engagement.title}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{engagement.meta_tags?.test_type || 'Unknown'}</div>
+              <div key={engagement.id} onClick={() => onSelectEngagement(engagement.id)} className="bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-gray-700 p-4 rounded-lg cursor-pointer border-l-4 border-l-sky-500 dark:border-l-blue-500 flex justify-between items-center hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors group">
+                <div className="flex-1 overflow-hidden pr-3">
+                  <div className="font-bold text-[15px] text-slate-900 dark:text-gray-200 mb-1 truncate">{engagement.title}</div>
+                  <div className="text-xs text-slate-500 dark:text-gray-500 font-medium">{engagement.meta_tags?.test_type || 'Unknown'}</div>
                 </div>
-                <button onClick={(e) => triggerDelete(e, engagement.id, engagement.title)} style={{ minWidth: '32px', height: '32px', backgroundColor: 'transparent', border: 'none', color: '#ef4444', fontSize: '16px', cursor: 'pointer', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Delete Engagement">✖</button>
+                <button onClick={(e) => triggerDelete(e, engagement.id, engagement.title)} className="w-8 h-8 flex items-center justify-center bg-transparent border-none text-red-400 dark:text-red-500 text-lg cursor-pointer rounded-md opacity-50 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Delete Engagement">✖</button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div style={{ ...cardStyle, width: '100%', maxWidth: '800px', flexGrow: 1 }}>
-        <h1 style={{ marginTop: 0, marginBottom: '30px', color: '#0f172a', fontSize: '26px' }}>Start New Engagement</h1>
+      {/* RIGHT COLUMN: NEW ENGAGEMENT FORM */}
+      <div className="bg-white dark:bg-[#161b22] p-8 rounded-xl border border-slate-200 dark:border-gray-800 shadow-sm w-full max-w-[800px] grow transition-colors">
+        <h1 className="mt-0 mb-8 text-slate-900 dark:text-white text-[26px] font-bold">Start New Engagement</h1>
         <form onSubmit={handleStart}>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <div style={{ ...fieldContainer, flex: 2 }}>
-              <label style={labelStyle}>Engagement Name / Title: *</label>
-              <input type="text" required value={engagementName} onChange={(e) => setEngagementName(e.target.value)} style={inputStyle} />
+          <div className="flex gap-5 mb-5">
+            <div className="flex-[2]">
+              <label className={labelClass}>Engagement Name / Title: *</label>
+              <input type="text" required value={engagementName} onChange={(e) => setEngagementName(e.target.value)} className={inputClass} />
             </div>
-            <div style={{ ...fieldContainer, flex: 1 }}>
-              <label style={labelStyle}>Test Type: *</label>
-              <select value={testType} onChange={(e) => { setTestType(e.target.value); setFormData({}); setIpsList(['']); setUrlsList(['']); setRolesList([{ role: '', user: '', password: '' }]); }} style={{...inputStyle, fontWeight: '600'}}>
+            <div className="flex-1">
+              <label className={labelClass}>Test Type: *</label>
+              <select value={testType} onChange={(e) => { setTestType(e.target.value); setFormData({}); setIpsList(['']); setUrlsList(['']); setRolesList([{ role: '', user: '', password: '' }]); }} className={`${inputClass} font-semibold`}>
                 <option value="Adversary Simulation">Adversary Simulation</option>
                 <option value="Black Box">Black Box (External)</option>
                 <option value="White Box">White Box (Internal/Code)</option>
               </select>
             </div>
           </div>
-          <div style={fieldContainer}>
-            <label style={labelStyle}>KeepSecureLink (Vuln Dashboard URL):</label>
-            <input type="url" value={keepSecureLink} placeholder="https://..." onChange={(e) => setKeepSecureLink(e.target.value)} style={inputStyle} />
+          <div className="mb-5">
+            <label className={labelClass}>KeepSecureLink (Vuln Dashboard URL):</label>
+            <input type="url" value={keepSecureLink} placeholder="https://..." onChange={(e) => setKeepSecureLink(e.target.value)} className={inputClass} />
           </div>
-          <hr style={{ border: 'none', borderTop: '2px solid #e2e8f0', margin: '30px 0' }} />
+
+          <hr className="border-none border-t-2 border-slate-100 dark:border-gray-800 my-8" />
 
           {testType === 'Adversary Simulation' && (
             <>
-              <div style={fieldContainer}><label style={labelStyle}>Assumed Laptop Name/IP</label><input type="text" name="laptop" onChange={handleInputChange} style={inputStyle} /></div>
-              <div style={fieldContainer}><label style={labelStyle}>Compromised Account</label><input type="text" name="account" onChange={handleInputChange} style={inputStyle} /></div>
-              <div style={fieldContainer}><label style={labelStyle}>Password / Hash</label><input type="text" name="password" onChange={handleInputChange} style={inputStyle} /></div>
+              <div className="mb-5"><label className={labelClass}>Assumed Laptop Name/IP</label><input type="text" name="laptop" onChange={handleInputChange} className={inputClass} /></div>
+              <div className="mb-5"><label className={labelClass}>Compromised Account</label><input type="text" name="account" onChange={handleInputChange} className={inputClass} /></div>
+              <div className="mb-5"><label className={labelClass}>Password / Hash</label><input type="text" name="password" onChange={handleInputChange} className={inputClass} /></div>
             </>
           )}
 
           {(testType === 'Black Box' || testType === 'White Box') && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                 {renderDynamicList('Target IPs', ipsList, setIpsList, 'e.g., 192.168.1.1')}
                 {renderDynamicList('Target URLs', urlsList, setUrlsList, 'e.g., https://api.acme.com')}
               </div>
-              {testType === 'White Box' && <div style={fieldContainer}><label style={labelStyle}>Infrastructure (AWS, GCP, Azure, etc.)</label><input type="text" name="infrastructure" onChange={handleInputChange} style={inputStyle} /></div>}
+              {testType === 'White Box' && <div className="mb-5"><label className={labelClass}>Infrastructure (AWS, GCP, Azure, etc.)</label><input type="text" name="infrastructure" onChange={handleInputChange} className={inputClass} /></div>}
+
               {renderRolesList()}
-              <div style={{ display: 'flex', gap: '24px', marginBottom: '20px', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' }}><input type="checkbox" name="vpn" onChange={handleInputChange} /> VPN Required</label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' }}><input type="checkbox" name="mobile" onChange={handleInputChange} /> Mobile Testing</label>
-                {testType === 'White Box' && <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' }}><input type="checkbox" name="source_code" onChange={handleInputChange} /> Source Code Prov.</label>}
+
+              <div className="flex gap-6 mb-5 p-4 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg">
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-gray-300 text-sm"><input type="checkbox" name="vpn" onChange={handleInputChange} className="w-4 h-4 accent-sky-500 dark:accent-blue-500" /> VPN Required</label>
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-gray-300 text-sm"><input type="checkbox" name="mobile" onChange={handleInputChange} className="w-4 h-4 accent-sky-500 dark:accent-blue-500" /> Mobile Testing</label>
+                {testType === 'White Box' && <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-gray-300 text-sm"><input type="checkbox" name="source_code" onChange={handleInputChange} className="w-4 h-4 accent-sky-500 dark:accent-blue-500" /> Source Code Prov.</label>}
               </div>
+
               {testType === 'White Box' && formData.source_code && (
-                <div style={listContainerStyle}>
-                  <div style={fieldContainer}><label style={labelStyle}>Source Code Location</label><input type="text" name="code_location" onChange={handleInputChange} style={inputStyle} /></div>
-                  <div style={{marginBottom: 0}}><label style={labelStyle}>Documentation Location</label><input type="text" name="docs_location" onChange={handleInputChange} style={inputStyle} /></div>
+                <div className={listContainerClass}>
+                  <div className="mb-4"><label className={labelClass}>Source Code Location</label><input type="text" name="code_location" onChange={handleInputChange} className={inputClass} /></div>
+                  <div><label className={labelClass}>Documentation Location</label><input type="text" name="docs_location" onChange={handleInputChange} className={inputClass} /></div>
                 </div>
               )}
+
               {formData.mobile && (
-                <div style={listContainerStyle}>
-                  <div style={fieldContainer}><label style={labelStyle}>APK Location (Android)</label><input type="text" name="apk_location" onChange={handleInputChange} style={inputStyle} /></div>
-                  <div style={{marginBottom: 0}}><label style={labelStyle}>IPA Location (iOS)</label><input type="text" name="ipa_location" onChange={handleInputChange} style={inputStyle} /></div>
+                <div className={listContainerClass}>
+                  <div className="mb-4"><label className={labelClass}>APK Location (Android)</label><input type="text" name="apk_location" onChange={handleInputChange} className={inputClass} /></div>
+                  <div><label className={labelClass}>IPA Location (iOS)</label><input type="text" name="ipa_location" onChange={handleInputChange} className={inputClass} /></div>
                 </div>
               )}
             </>
           )}
 
-          <button type="submit" style={{ width: '100%', padding: '16px', backgroundColor: '#0ea5e9', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', marginTop: '20px', boxShadow: '0 4px 6px -1px rgba(14, 165, 233, 0.4)' }}>
+          <button type="submit" className="w-full p-4 bg-sky-500 hover:bg-sky-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white border-none rounded-lg cursor-pointer font-bold text-base mt-5 shadow-sm transition-colors">
             Launch Engagement
           </button>
         </form>
