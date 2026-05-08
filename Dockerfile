@@ -14,6 +14,7 @@ RUN npm run build
 # STAGE 2: Setup the FastAPI Backend
 # ==========================================
 FROM python:3.13-slim
+RUN apt-get update && apt-get install -y gosu weasyprint libpango-1.0-0 libpangoft2-1.0-0 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # SECURITY: Create a dedicated non-root user and group
