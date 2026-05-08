@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { ReactFlow, Background, Controls, Panel, MiniMap, useReactFlow, ReactFlowProvider } from '@xyflow/react';
+import { ArrowLeft, Hand, MousePointer2, StickyNote, Search, Menu, Wrench, Network, FileText, FileWarning, Download, Upload } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 
 import StartingNode from './nodes/StartingNode';
@@ -13,7 +14,11 @@ import { useProjectImport } from '../hooks/useProjectImport';
 
 function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
+
+  // Toggle states for the unified palette
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -109,7 +114,31 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
     shadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
   };
 
-  const menuButtonStyle = { width: '100%', textAlign: 'left', padding: '10px 16px', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer', fontSize: '13px', backgroundColor: t.panelBg, color: t.text, display: 'block', transition: 'background-color 0.2s ease' };
+  const menuButtonStyle = { width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer', fontSize: '13px', backgroundColor: t.panelBg, color: t.text, display: 'flex', alignItems: 'center', gap: '8px', transition: 'background-color 0.2s ease' };
+
+  // Reusable Toolbar Button Component
+  const ToolButton = ({ icon: Icon, active, onClick, title }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        backgroundColor: active ? t.activeBg : 'transparent',
+        color: active ? t.activeText : t.textMuted,
+        border: 'none',
+        padding: '8px',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s'
+      }}
+      onMouseOver={(e) => !active && (e.currentTarget.style.backgroundColor = t.hover)}
+      onMouseOut={(e) => !active && (e.currentTarget.style.backgroundColor = 'transparent')}
+    >
+      <Icon size={18} strokeWidth={2.5} />
+    </button>
+  );
 
   return (
     <div style={{ width: '100%', height: '100%', backgroundColor: t.bg, position: 'relative', transition: 'background-color 0.2s' }}>
@@ -132,7 +161,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         onNodesDelete={onNodesDelete} onEdgesDelete={onEdgesDelete}
         onConnect={onConnect}
         onEdgeDoubleClick={onEdgeDoubleClick}
-        onPaneClick={() => {setSelectedNode(null); setIsMenuOpen(false);}}
+        onPaneClick={() => {setSelectedNode(null); setIsMenuOpen(false); setIsSearchOpen(false);}}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView fitViewOptions={{ padding: 0.5, maxZoom: 0.8 }}
@@ -141,61 +170,97 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
       >
         <Background color={theme === 'dark' ? '#30363d' : '#cbd5e1'} variant="dots" />
         <Controls style={{ backgroundColor: t.panelBg, color: t.text, border: `1px solid ${t.border}`, boxShadow: t.shadow }} />
-
         <MiniMap nodeStrokeWidth={3} zoomable pannable style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', boxShadow: t.shadow }} nodeColor={(node) => { if (node.data?.status === 'vulnerability') return '#fca5a5'; if (node.data?.status === 'path') return '#86efac'; if (node.data?.status === 'rabbit_hole') return '#cbd5e1'; return '#fde047'; }} />
 
-        <Panel position="top-left" style={{ margin: '15px' }}>
-          <button onClick={onBack} style={{ backgroundColor: t.panelBg, color: t.text, border: `1px solid ${t.border}`, padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', boxShadow: t.shadow, fontWeight: '600' }}>
-            Back to Dashboard
-          </button>
-        </Panel>
+        {/* UNIFIED TOP-LEFT PALETTE */}
+        <Panel position="top-left" style={{ margin: '20px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 1000 }}>
 
-        <Panel position="top-center" style={{ margin: '15px' }}>
-          <div style={{ display: 'flex', gap: '10px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '8px', border: `1px solid ${t.border}`, boxShadow: t.shadow }}>
-            <input type="text" placeholder="Search IPs, tools..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', width: '250px' }} />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', cursor: 'pointer', fontWeight: '500' }}>
-              <option value="all">Show All</option>
-              <option value="vulnerability">Vulnerabilities Only</option>
-              <option value="path">Attack Paths Only</option>
-              <option value="action">Actions Only</option>
-            </select>
-          </div>
-        </Panel>
+          {/* Main Toolbar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: t.panelBg, padding: '6px', borderRadius: '12px', boxShadow: t.shadow, border: `1px solid ${t.border}` }}>
+            <ToolButton onClick={onBack} icon={ArrowLeft} title="Back to Dashboard" />
 
-        <Panel position="top-right" style={{ margin: '15px'}}>
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ backgroundColor: t.panelBg, color: t.text, border: `1px solid ${t.border}`, padding: '10px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', boxShadow: t.shadow, display: 'block', fontSize: '14px' }}>
-              {isMenuOpen ? 'Close Menu' : 'Menu'}
-            </button>
-            {isMenuOpen && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: t.shadow, zIndex: 1000, width: '180px' }}>
-                <button onClick={() => { setIsToolsModalOpen(true); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}><span style={{marginRight: '6px'}}></span> Tools Library</button>
-                <div style={{ height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
-                <button onClick={() => { handleTidyGraph('LR'); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>Tidy Graph</button>
-                <button onClick={() => { handleGenerateReport('full'); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>Full Report (PDF)</button>
-                <button onClick={() => { handleGenerateReport('vulns'); setIsMenuOpen(false); }} style={{...menuButtonStyle, color: t.dangerText}} onMouseOver={(e) => e.target.style.backgroundColor = theme === 'dark' ? 'rgba(248, 81, 73, 0.1)' : '#fee2e2'} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>Vulns Only (PDF)</button>
-                <div style={{ height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
-                <button onClick={() => { handleExportZip(); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>Export Project</button>
-                <input type="file" ref={importFileRef} style={{ display: 'none' }} onChange={(e) => { handleImportZip(e); setIsMenuOpen(false); }} accept=".zip" />
-                <button onClick={() => { importFileRef.current.click(); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>Import Project</button>
-              </div>
-            )}
-          </div>
-        </Panel>
-
-        <Panel position="bottom-center" style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', gap: '5px', backgroundColor: t.panelBg, padding: '6px', borderRadius: '10px', boxShadow: t.shadow, border: `1px solid ${t.border}`, alignItems: 'center' }}>
-            <button onClick={() => setIsSelectMode(false)} style={{ backgroundColor: !isSelectMode ? t.activeBg : 'transparent', color: !isSelectMode ? t.activeText : t.textMuted, border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>Pan</button>
-            <button onClick={() => setIsSelectMode(true)} style={{ backgroundColor: isSelectMode ? t.activeBg : 'transparent', color: isSelectMode ? t.activeText : t.textMuted, border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}>Select</button>
             <div style={{ width: '1px', height: '20px', backgroundColor: t.border, margin: '0 4px' }} />
-            <button onClick={() => createStickyNote(reactFlowInstance)} style={{ backgroundColor: 'transparent', color: '#0ea5e9', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = t.hover} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-              Add Note
-            </button>
+
+            <ToolButton active={!isSelectMode} onClick={() => {setIsSelectMode(false); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={Hand} title="Pan Canvas" />
+            <ToolButton active={isSelectMode} onClick={() => {setIsSelectMode(true); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={MousePointer2} title="Select Nodes" />
+            <ToolButton onClick={() => {createStickyNote(reactFlowInstance); setIsMenuOpen(false); setIsSearchOpen(false);}} icon={StickyNote} title="Add Sticky Note" />
+
+            <div style={{ width: '1px', height: '20px', backgroundColor: t.border, margin: '0 4px' }} />
+
+            {/* Search Toggle */}
+            <ToolButton
+              active={isSearchOpen}
+              onClick={() => { setIsSearchOpen(!isSearchOpen); setIsMenuOpen(false); }}
+              icon={Search}
+              title="Search & Filter"
+            />
+
+            {/* Menu Toggle */}
+            <div style={{ position: 'relative' }}>
+              <ToolButton
+                active={isMenuOpen}
+                onClick={() => { setIsMenuOpen(!isMenuOpen); setIsSearchOpen(false); }}
+                icon={Menu}
+                title="Project Menu"
+              />
+
+              {/* Expandable Menu Popout */}
+              {isMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 14px)', left: 0, backgroundColor: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', boxShadow: t.shadow, minWidth: '220px' }}>
+                  <button onClick={() => { setIsToolsModalOpen(true); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <Wrench size={16} /> Tools Library
+                  </button>
+                  <div style={{ height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
+                  <button onClick={() => { handleTidyGraph('LR'); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <Network size={16} /> Tidy Graph Layout
+                  </button>
+                  <button onClick={() => { handleGenerateReport('full'); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <FileText size={16} /> Full Report (PDF)
+                  </button>
+                  <button onClick={() => { handleGenerateReport('vulns'); setIsMenuOpen(false); }} style={{...menuButtonStyle, color: t.dangerText}} onMouseOver={(e) => e.target.style.backgroundColor = theme === 'dark' ? 'rgba(248, 81, 73, 0.1)' : '#fee2e2'} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <FileWarning size={16} /> Vulns Only (PDF)
+                  </button>
+                  <div style={{ height: '1px', backgroundColor: t.border, margin: '4px 0' }} />
+                  <button onClick={() => { handleExportZip(); setIsMenuOpen(false); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <Download size={16} /> Export Project (ZIP)
+                  </button>
+                  <input type="file" ref={importFileRef} style={{ display: 'none' }} onChange={(e) => { handleImportZip(e); setIsMenuOpen(false); }} accept=".zip" />
+                  <button onClick={() => { importFileRef.current.click(); }} style={menuButtonStyle} onMouseOver={(e) => e.target.style.backgroundColor = t.hover} onMouseOut={(e) => e.target.style.backgroundColor = t.panelBg}>
+                    <Upload size={16} /> Import Project (ZIP)
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Expandable Search Popout */}
+          {isSearchOpen && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: t.panelBg, padding: '8px', borderRadius: '10px', border: `1px solid ${t.border}`, boxShadow: t.shadow, width: 'max-content', marginTop: '4px' }}>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search tools, IPs, queries..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', width: '250px', fontSize: '13px' }}
+              />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{ backgroundColor: t.inputBg, color: t.text, border: `1px solid ${t.border}`, padding: '8px 12px', borderRadius: '6px', outline: 'none', cursor: 'pointer', fontWeight: '500', fontSize: '13px' }}
+              >
+                <option value="all">All Nodes</option>
+                <option value="vulnerability">Vulnerabilities</option>
+                <option value="path">Attack Paths</option>
+                <option value="action">Standard Actions</option>
+              </select>
+            </div>
+          )}
         </Panel>
+
       </ReactFlow>
 
+      {/* Connection Editor Modal */}
       {edgeModal.isOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: t.overlay, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ backgroundColor: t.panelBg, padding: '25px', borderRadius: '12px', width: '350px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', border: `1px solid ${t.border}` }}>
@@ -212,6 +277,7 @@ function CanvasInner({ onNodeOpen, onBack, onFlowChange, engagementId, theme }) 
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
       {deleteModal.isOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: t.overlay, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ backgroundColor: t.panelBg, padding: '25px', borderRadius: '12px', width: '350px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', border: `1px solid ${t.border}` }}>
