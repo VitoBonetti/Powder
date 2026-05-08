@@ -9,6 +9,7 @@ import { EditorView, Decoration, ViewPlugin, MatchDecorator, keymap } from '@cod
 import { autocompletion } from '@codemirror/autocomplete';
 import { BACKEND_URL, getApiUrl } from '../config';
 
+// --- DARK MODE HIGHLIGHTING ---
 const customMarkdownStyleDark = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#60a5fa" },
   { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#93c5fd" },
@@ -17,8 +18,27 @@ const customMarkdownStyleDark = HighlightStyle.define([
   { tag: t.strong, fontWeight: "bold", color: "#ffffff" },
   { tag: t.emphasis, fontStyle: "italic", color: "#cbd5e1" },
   { tag: t.strikethrough, textDecoration: "line-through" },
+  { tag: t.quote, color: "#94a3b8", fontStyle: "italic" },
+  { tag: t.monospace, color: "#38bdf8" }, // Code blocks
+  { tag: t.meta, color: "#64748b" },      // Markdown symbols (###, >, ```)
+  { tag: t.link, color: "#60a5fa", textDecoration: "underline" },
+  { tag: t.url, color: "#64748b" },
+  { tag: t.content, color: "#c9d1d9" },   // Normal Text
+  { tag: t.keyword, color: "#c084fc" },
+  { tag: t.string, color: "#4ade80" },
 ]);
 
+const editorThemeDark = EditorView.theme({
+  "&": { color: "#c9d1d9 !important", backgroundColor: "transparent" },
+  ".cm-content": { color: "#c9d1d9 !important", caretColor: "#60a5fa" },
+  ".cm-line": { color: "#c9d1d9" },
+  ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.04)" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: "rgba(96, 165, 250, 0.3) !important" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#60a5fa" },
+}, { dark: true });
+
+
+// --- LIGHT MODE HIGHLIGHTING (The Fix!) ---
 const customMarkdownStyleLight = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#0284c7" },
   { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#0369a1" },
@@ -27,18 +47,25 @@ const customMarkdownStyleLight = HighlightStyle.define([
   { tag: t.strong, fontWeight: "bold", color: "#000000" },
   { tag: t.emphasis, fontStyle: "italic", color: "#475569" },
   { tag: t.strikethrough, textDecoration: "line-through" },
+  { tag: t.quote, color: "#64748b", fontStyle: "italic" },
+  { tag: t.monospace, color: "#0ea5e9" }, // Code blocks
+  { tag: t.meta, color: "#94a3b8" },      // Markdown symbols (###, >, ```)
+  { tag: t.link, color: "#2563eb", textDecoration: "underline" },
+  { tag: t.url, color: "#94a3b8" },
+  { tag: t.content, color: "#334155" },   // Normal Text (Force dark slate)
+  { tag: t.keyword, color: "#d946ef" },
+  { tag: t.string, color: "#16a34a" },
 ]);
 
-// Explicitly forces the base text color to override any global white text bleeding in
 const editorThemeLight = EditorView.theme({
   "&": { color: "#334155 !important", backgroundColor: "transparent" },
-  ".cm-content": { caretColor: "#0ea5e9" },
+  ".cm-content": { color: "#334155 !important", caretColor: "#0ea5e9" },
+  ".cm-line": { color: "#334155" },
+  ".cm-activeLine": { backgroundColor: "rgba(0, 0, 0, 0.04)" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: "rgba(14, 165, 233, 0.25) !important" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#0ea5e9" },
 }, { dark: false });
 
-const editorThemeDark = EditorView.theme({
-  "&": { color: "#c9d1d9 !important", backgroundColor: "transparent" },
-  ".cm-content": { caretColor: "#60a5fa" },
-}, { dark: true });
 
 export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate, theme = 'dark' }) {
 
@@ -120,8 +147,10 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     };
 
     return [
-      theme === 'dark' ? editorThemeDark : editorThemeLight, // <-- Injecting explicit base colors here!
+      // Force our exact base theme overrides depending on the mode
+      theme === 'dark' ? editorThemeDark : editorThemeLight,
       markdown({ base: markdownLanguage, codeLanguages: languages }),
+      // Inject the exact syntax colors
       syntaxHighlighting(theme === 'dark' ? customMarkdownStyleDark : customMarkdownStyleLight),
       wikiLinkPlugin,
       tagPlugin,
@@ -164,7 +193,8 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
   return (
     <CodeMirror
       value={content}
-      theme={theme === 'dark' ? vscodeDark : 'light'}
+      // Set to 'none' in light mode so CodeMirror stops trying to overwrite our styling!
+      theme={theme === 'dark' ? vscodeDark : 'none'}
       extensions={editorExtensions}
       onChange={onChange}
       className="text-lg powder-editor pb-20 transition-colors"
