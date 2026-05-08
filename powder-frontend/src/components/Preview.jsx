@@ -1,9 +1,14 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { visit } from 'unist-util-visit';
-import { Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame, Pencil, Bug, Bandage, Braces, NotepadText, Speech, ChevronsLeftRightEllipsis, NotebookText, BookOpenCheck, BookmarkCheck } from 'lucide-react';
+import {
+  Info, Lightbulb, AlertTriangle, AlertCircle, CheckCircle, Flame, Pencil, Bug, Bandage,
+  Braces, NotepadText, Speech, ChevronsLeftRightEllipsis, NotebookText, BookOpenCheck,
+  BookmarkCheck, Copy, Check
+} from 'lucide-react';
 import mermaid from 'mermaid';
+import toast from 'react-hot-toast';
 import { BACKEND_URL } from '../config';
 
 // --- CUSTOM PLUGIN: OBSIDIAN CALLOUTS ---
@@ -48,9 +53,40 @@ const MermaidDiagram = ({ chart, theme }) => {
   return <div ref={ref} className="my-6 flex justify-center" />;
 };
 
+// --- NEW: ENHANCED CODE BLOCK WITH COPY ---
+const CodeBlock = ({ children, className, theme }) => {
+  const [copied, setCopied] = useState(false);
+  const codeContent = String(children).replace(/\n$/, '');
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeContent);
+    setCopied(true);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group my-6">
+      <button
+        onClick={handleCopy}
+        className={`absolute right-2 top-2 p-2 rounded-md border transition-all opacity-0 group-hover:opacity-100 z-10 ${
+          theme === 'dark' 
+          ? 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white' 
+          : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm'
+        }`}
+        title="Copy code"
+      >
+        {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+      </button>
+      <pre className="m-0 overflow-x-auto">
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  );
+};
+
 export default function Preview({ content, onLinkClick, onTagClick, theme = 'dark' }) {
   return (
-    // dark:prose-invert handles standard markdown colors beautifully
     <div className="prose dark:prose-invert prose-lg max-w-none pb-20 transition-colors">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkObsidianCallouts]}
@@ -61,7 +97,7 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               const title = props['data-callout-title'] || node?.properties?.['data-callout-title'] || 'Info';
 
               let Icon = Info;
-              let colors = "border-blue-400 text-blue-700 bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:bg-blue-900/10"; // Default
+              let colors = "border-blue-400 text-blue-700 bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:bg-blue-900/10";
 
               if (['note'].includes(type)) { Icon = Pencil; colors = "border-slate-400 text-slate-700 bg-slate-50 dark:border-slate-500 dark:text-slate-400 dark:bg-slate-900/10"; }
               else if (['vuln', 'bug', 'bugs'].includes(type)) { Icon = Bug; colors = "border-red-400 text-red-700 bg-red-50 dark:border-red-500 dark:text-red-300 dark:bg-red-500/10"; }
@@ -72,7 +108,6 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               else if (['danger', 'error'].includes(type)) { Icon = Flame; colors = "border-orange-400 text-orange-700 bg-orange-50 dark:border-orange-500 dark:text-orange-300 dark:bg-orange-500/10"; }
               else if (['success', 'check', 'done'].includes(type)) { Icon = CheckCircle; colors = "border-green-400 text-green-700 bg-green-50 dark:border-green-500 dark:text-green-400 dark:bg-green-900/10"; }
 
-              // Templates
               else if (['metadata'].includes(type)) { Icon = Braces; colors = "border-fuchsia-400 text-fuchsia-700 bg-fuchsia-50 dark:border-fuchsia-500 dark:text-fuchsia-400 dark:bg-fuchsia-900/10"; }
               else if (['description'].includes(type)) { Icon = NotepadText; colors = "border-slate-400 text-slate-700 bg-slate-50 dark:border-slate-500 dark:text-slate-400 dark:bg-slate-900/10"; }
               else if (['usage'].includes(type)) { Icon = Speech; colors = "border-lime-400 text-lime-700 bg-lime-50 dark:border-lime-500 dark:text-lime-400 dark:bg-lime-900/10"; }
@@ -129,7 +164,18 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
           code({node, inline, className, children, ...props}) {
             const match = /language-(\w+)/.exec(className || '');
             const isMermaid = match && match[1] === 'mermaid';
-            if (!inline && isMermaid) { return <MermaidDiagram chart={String(children).replace(/\n$/, '')} theme={theme} />; }
+
+            // Render Mermaid diagrams as before
+            if (!inline && isMermaid) {
+              return <MermaidDiagram chart={String(children).replace(/\n$/, '')} theme={theme} />;
+            }
+
+            // If it's a standard code block (not inline), use the new CodeBlock with copy button
+            if (!inline) {
+              return <CodeBlock children={children} className={className} theme={theme} />;
+            }
+
+            // Standard inline code
             return <code className={className} {...props}>{children}</code>;
           }
         }}
