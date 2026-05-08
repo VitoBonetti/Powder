@@ -3,7 +3,7 @@ import { NodeResizer, Handle, Position } from '@xyflow/react';
 
 const STICKY_COLORS = ['#fef08a', '#bbf7d0', '#bae6fd', '#fbcfe8', '#e9d5ff', '#e2e8f0'];
 
-// NEW: Helper to perfectly strip the YAML and the # Title from the sticky text
+// Helper to perfectly strip the YAML and the # Title from the sticky text
 const getCleanText = (rawText) => {
   if (!rawText) return '';
   let cleaned = rawText.replace(/^---\n([\s\S]*?)\n---\n*/, ''); // Strip YAML

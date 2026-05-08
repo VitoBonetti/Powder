@@ -658,6 +658,8 @@ def get_canvas_data(target_folder: str = None) -> dict:
                     "data": {
                         "note": post.content,
                         "color": post.get('color', '#fef08a'),
+                        "width": post.get('width', 200),
+                        "height": post.get('height', 150),
                         "title": rel_path.split("/")[-1].replace(".md", ""),
                         "phase": post.get('phase', 'Enumeration'),
                         "command": post.get('command', '')

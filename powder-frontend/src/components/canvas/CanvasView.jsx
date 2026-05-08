@@ -112,11 +112,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       .then(data => {
         const formattedNodes = data.nodes.map(n => {
           if (n.type === 'sticky_note') {
-            const widthMatch = n.data.note.match(/^width:\s*"?(\d+)"?/m);
-            const heightMatch = n.data.note.match(/^height:\s*"?(\d+)"?/m);
-            if (widthMatch || heightMatch) {
-              n.style = { ...n.style, width: widthMatch ? parseInt(widthMatch[1]) : 200, height: heightMatch ? parseInt(heightMatch[1]) : 150 };
-            }
+            const w = n.data.width ? parseInt(n.data.width) : 200;
+            const h = n.data.height ? parseInt(n.data.height) : 150;
+            n.style = { ...n.style, width: w, height: h };
           }
           return n;
         });
@@ -287,7 +285,6 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       if (w !== undefined && h !== undefined) {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, style: { ...n.style, width: w, height: h } } : n));
       }
-
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
       const match = data.content.match(/^---\n([\s\S]*?)\n---/);
@@ -295,7 +292,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         let yaml = match[1];
         if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`); else yaml += `\ncolor: "${newColor}"`;
         if (w !== undefined) {
-           // Save as raw numbers
+           // Save as pure numbers so backend parses it easily
            if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: ${w}`); else yaml += `\nwidth: ${w}`;
            if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: ${h}`); else yaml += `\nheight: ${h}`;
         }
