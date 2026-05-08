@@ -112,11 +112,10 @@ export default function CanvasView({ activeFile, setActiveFile }) {
       .then(data => {
         const formattedNodes = data.nodes.map(n => {
           if (n.type === 'sticky_note') {
-            const widthMatch = n.data.note.match(/^width:.*"(\d+)".*$/m);
-            const heightMatch = n.data.note.match(/^height:.*"(\d+)".*$/m);
-            if (widthMatch || heightMatch) {
-              n.style = { ...n.style, width: widthMatch ? parseInt(widthMatch[1]) : 200, height: heightMatch ? parseInt(heightMatch[1]) : 150 };
-            }
+            // FIX: Read width and height directly from the parsed YAML metadata!
+            const w = n.data.width ? parseInt(n.data.width) : 200;
+            const h = n.data.height ? parseInt(n.data.height) : 150;
+            n.style = { ...n.style, width: w, height: h };
           }
           return n;
         });
@@ -281,10 +280,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     });
   }, [fileContent, selectedFile, handleDeleteEdge, handleLabelEdge]);
 
-  // FIX 3: INSTANT SIZING SYNC
+  // save dimensions as clean numbers to the YAML
   const saveStickyNote = async (nodeId, newText, newColor, w, h) => {
     try {
-      // Instantly update UI so the size sticks when you drag!
       if (w !== undefined && h !== undefined) {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, style: { ...n.style, width: w, height: h } } : n));
       }
@@ -296,10 +294,10 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         let yaml = match[1];
         if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`); else yaml += `\ncolor: "${newColor}"`;
         if (w !== undefined) {
-           if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: "${w}"`); else yaml += `\nwidth: "${w}"`;
-           if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: "${h}"`); else yaml += `\nheight: "${h}"`;
+           // Save as raw numbers
+           if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: ${w}`); else yaml += `\nwidth: ${w}`;
+           if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: ${h}`); else yaml += `\nheight: ${h}`;
         }
-        // Double newline prevents H1 markdown bug!
         const newContent = `---\n${yaml}\n---\n\n${newText}`;
         await fetch(getApiUrl(`/notes/${nodeId}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
       }
