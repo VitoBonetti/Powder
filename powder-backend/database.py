@@ -48,6 +48,32 @@ def init_db():
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS flow_nodes
+        (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            type TEXT NOT NULL,
+            command TEXT,
+            status TEXT DEFAULT 'action',
+            position_x REAL DEFAULT 0.0,
+            position_y REAL DEFAULT 0.0,
+            file_path TEXT NOT NULL,
+            meta_tags TEXT, -- Store JSON as text
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS flow_edges
+        (
+             id TEXT PRIMARY KEY,
+             source TEXT NOT NULL,
+             target TEXT NOT NULL,
+             label TEXT
+        )
+    """)
+
     conn.execute("UPDATE background_jobs SET status = 'PENDING' WHERE status = 'PROCESSING'")
 
     conn.commit()

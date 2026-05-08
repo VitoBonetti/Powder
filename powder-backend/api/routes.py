@@ -2,13 +2,16 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Security, 
 from fastapi.security.api_key import APIKeyHeader
 from typing import List
 from dotenv import load_dotenv
-from models.schemas import NoteData, MoveData, InboxItem, RenameNote
+from models.schemas import NoteData, MoveData, InboxItem, RenameNote, NodeCreate, EdgeCreate
 from services import file_system
 from services.file_system import VAULT_DIR
 from api.auth import verify_access
 import os
 import asyncio
-from database import sync_search_index
+from database import sync_search_index, get_db
+import uuid
+import json
+import re
 
 
 load_dotenv()
@@ -201,3 +204,60 @@ def get_knowledge_graph(user: str = Depends(verify_access)):
         return file_system.build_knowledge_graph()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/flow/nodes")
+def create_flow_node(node: NodeCreate, background_tasks: BackgroundTasks, user: str = Depends(verify_access)):
+    node_id = str(uuid.uuid4())
+
+    # 1. Create the dedicated Markdown file in Powder's Vault
+    safe_title = re.sub(r'[^\w\s-]', '', node.title).strip().replace(' ', '_')
+    file_path = f"_Flows/{safe_title}_{node_id[:8]}.md"
+
+    # Pre-populate the note with the Pentest command
+    initial_content = f"---\ntype: flow-node\nstatus: {node.status}\n---\n\n# {node.title}\n\n"
+    if node.command:
+        initial_content += f"**Command:**\n```bash\n{node.command}\n```\n\n---\n\n## Notes\n"
+
+    file_system.save_note_content(file_path, initial_content)
+
+    # 2. Save the graph node to SQLite (The Pointer)
+    conn = get_db()
+    conn.execute("""
+                 INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 """, (
+                     node_id, node.title, node.type, node.command, node.status,
+                     node.position_x, node.position_y, file_path, json.dumps(node.meta_tags or {})
+                 ))
+    conn.commit()
+    conn.close()
+
+    return {"id": node_id, "file_path": file_path, "status": "success"}
+
+
+@router.get("/flow/graph")
+def get_flow_graph(user: str = Depends(verify_access)):
+    """Returns the graph for React Flow to render."""
+    conn = get_db()
+    nodes = [dict(row) for row in conn.execute("SELECT * FROM flow_nodes").fetchall()]
+    edges = [dict(row) for row in conn.execute("SELECT * FROM flow_edges").fetchall()]
+    conn.close()
+
+    # Format for React Flow
+    rf_nodes = [
+        {
+            "id": n["id"],
+            "type": n["type"],
+            "position": {"x": n["position_x"], "y": n["position_y"]},
+            "data": {
+                "title": n["title"],
+                "command": n["command"],
+                "status": n["status"],
+                "file_path": n["file_path"],  # The crucial pointer
+                "meta_tags": json.loads(n["meta_tags"] or "{}")
+            }
+        }
+        for n in nodes
+    ]
+    return {"nodes": rf_nodes, "edges": edges}
