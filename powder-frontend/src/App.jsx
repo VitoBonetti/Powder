@@ -7,9 +7,10 @@ import TabBar from './components/TabBar';
 import TemplateModal from './components/TemplateModal';
 import SearchModal from './components/SearchModal';
 import GraphView from './components/GraphView';
+import CanvasPage from './components/CanvasPage'
 import { useAutoSave } from './hooks/useAutoSave';
 import { getApiUrl, BACKEND_URL } from './config';
-import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
+import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircle, Workflow } from 'lucide-react';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -212,6 +213,16 @@ function App() {
             >
               <Network className="w-4 h-4" />
             </button>
+
+            <div className="w-px bg-gray-700 mx-1"></div> {/* Visual Divider */}
+
+            <button
+              onClick={() => setViewMode('flow')}
+              title="PentestFlow Canvas"
+              className={`p-1.5 rounded transition-colors ${viewMode === 'flow' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            >
+              <Workflow className="w-4 h-4" />
+            </button>
           </div>
         )}
 
@@ -221,8 +232,20 @@ function App() {
             <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
               <GraphView onNodeClick={(path) => {
                 openFileInTab(path);
-                setViewMode('edit'); // Automatically switch to edit mode when a node is clicked
+                setViewMode('edit');
               }} />
+            </div>
+          ) : viewMode === 'flow' ? (
+            /* --- THIS IS THE NEW POWDERFLOW BRIDGE --- */
+            <div className="flex h-full gap-2">
+              <div className="flex-[7] border-r border-gray-800 relative bg-white rounded-lg overflow-hidden">
+                <CanvasPage
+                  onNodeOpen={(filePath) => {
+                    openFileInTab(filePath);
+                    setViewMode('split'); // Instantly open the node's file in split view!
+                  }}
+                />
+              </div>
             </div>
           ) : !activeFile ? (
             <div className="h-full flex items-center justify-center text-gray-500">Select a note from the sidebar to start writing.</div>
