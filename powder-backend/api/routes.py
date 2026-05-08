@@ -1033,13 +1033,13 @@ def stream_zip(folder_path: str, zip_filename: str):
 
 # --- Add these routes to your FastAPI app ---
 
-@router.get("/api/download/clipper")  #
+@router.get("/download/clipper")  #
 def download_clipper(user: str = Depends(verify_access)):
     folder_path = "/extensions/powder-clipper"
     return stream_zip(folder_path, "powder-clipper.zip")
 
 
-@router.get("/api/download/cli")
+@router.get("/download/cli")
 def download_cli(user: str = Depends(verify_access)):
     folder_path = "/extensions/powder-cli"
     return stream_zip(folder_path, "powder-cli.zip")
