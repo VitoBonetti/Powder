@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash, Workflow, Sun, Moon } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, FolderPlus, Trash2, X, Upload, Image as ImageIcon, LogOut, Settings, Hash, Workflow, Sun, Moon, Layers, DownloadCloud } from 'lucide-react';
 import { getApiUrl, BACKEND_URL } from './config';
 import { limitConcurrency } from './utils/concurrency';
 
@@ -28,7 +28,7 @@ const Modal = ({ isOpen, onClose, title, children, actionLabel, onAction, action
 
   const actionButtonClasses = actionVariant === "danger"
     ? "px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors"
-    : "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors";
+    : "px-4 py-2 bg-sky-500 hover:bg-sky-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors";
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -547,6 +547,15 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
           </button>
         )}
 
+        {/* --- NEW: Extensions & CLI Button --- */}
+        <button
+          onClick={() => openModal('downloads')}
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-md transition-all group"
+        >
+          <Layers className="w-4 h-4 text-slate-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+          <span className="font-medium">Extensions & CLI</span>
+        </button>
+
         <button
           onClick={() => openModal('settings')}
           className="flex items-center gap-3 w-full px-3 py-2 text-sm text-slate-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-md transition-all group"
@@ -580,6 +589,41 @@ export default function Sidebar({ onFileSelect, refreshTrigger, onTagClick, onFi
       </div>
 
       {/* --- MODALS --- */}
+
+      {/* NEW: Downloads Modal */}
+      <Modal isOpen={activeModal === 'downloads'} onClose={closeModal} title="Tools & Extensions">
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 dark:text-gray-400 mb-4">Download official Powder extensions directly from your server.</p>
+
+          <div className="p-4 border border-slate-200 dark:border-gray-800 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex flex-col gap-3">
+            <div>
+              <h4 className="font-bold text-sm text-slate-800 dark:text-gray-200">Powder Clipper (Chrome)</h4>
+              <p className="text-xs text-slate-500 dark:text-gray-500 mt-1">A browser extension to instantly capture text, images, and full pages directly into your vault.</p>
+            </div>
+            <a
+              href={getApiUrl('/download/clipper')}
+              className="flex items-center justify-center gap-2 w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-bold transition-colors"
+            >
+              <DownloadCloud className="w-4 h-4" /> Download Clipper ZIP
+            </a>
+          </div>
+
+          <div className="p-4 border border-slate-200 dark:border-gray-800 rounded-lg bg-slate-50 dark:bg-gray-900/50 flex flex-col gap-3">
+            <div>
+              <h4 className="font-bold text-sm text-slate-800 dark:text-gray-200">Powder CLI (Linux/Windows)</h4>
+              <p className="text-xs text-slate-500 dark:text-gray-500 mt-1">Command-line scripts to pipe terminal output (like nmap scans) straight into your vault notes.</p>
+            </div>
+            <a
+              href={getApiUrl('/download/cli')}
+              className="flex items-center justify-center gap-2 w-full py-2 bg-slate-800 hover:bg-slate-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white rounded-md text-sm font-bold transition-colors"
+            >
+              <DownloadCloud className="w-4 h-4" /> Download CLI ZIP
+            </a>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Existing Settings Modal */}
       <Modal isOpen={activeModal === 'settings'} onClose={closeModal} title="CLI & API Access">
         <div className="space-y-4">
           <p className="text-xs text-slate-500 dark:text-gray-400">Manage Personal Access Tokens for your CLI and terminal agents.</p>

@@ -995,3 +995,50 @@ def delete_tool(tool_id: str, user: str = Depends(verify_access)):
         return {"message": "Tool deleted"}
     finally:
         conn.close()
+
+
+# ==============================================================================
+# DOWNLOAD UTILIES ROUTES
+# ==============================================================================
+
+# Create a helper function to zip folders in memory
+def stream_zip(folder_path: str, zip_filename: str):
+    if not os.path.exists(folder_path):
+        raise HTTPException(status_code=404, detail=f"Folder {folder_path} not found on server.")
+
+    mem_zip = io.BytesIO()
+
+    # Compress files into the memory buffer
+    with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Keep the folder structure inside the zip clean
+                arcname = os.path.relpath(file_path, folder_path)
+                zf.write(file_path, arcname)
+
+    # Reset the buffer position to the beginning before sending
+    mem_zip.seek(0)
+
+    # Stream the buffer directly to the user as a download
+    return StreamingResponse(
+        mem_zip,
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
+    )
+
+
+# --- Add these routes to your FastAPI app ---
+
+@router.get("/api/download/clipper")  # Use @router.get if you are in routes.py
+def download_clipper(user: str = Depends(verify_access)):
+    # Adjust this path based on where powder-clipper is relative to your backend script
+    folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "powder-clipper"))
+    return stream_zip(folder_path, "powder-clipper.zip")
+
+
+@router.get("/api/download/cli")  # Use @router.get if you are in routes.py
+def download_cli(user: str = Depends(verify_access)):
+    # Adjust this path based on where powder-cli is relative to your backend script
+    folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "powder-cli"))
+    return stream_zip(folder_path, "powder-cli.zip")
