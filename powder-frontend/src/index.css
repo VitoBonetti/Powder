@@ -3,6 +3,32 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html.dark {
+  color-scheme: dark;
+}
+
+/* Custom Webkit Scrollbar Styling that respects Dark Mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 4px;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155; /* slate-700 */
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* slate-400 */
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #475569; /* slate-600 */
+}
+
 body {
   margin: 0;
   padding: 0;
