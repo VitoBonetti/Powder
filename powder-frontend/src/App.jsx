@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Toaster } from 'react-hot-toast';
 import Login from './Login';
 import Sidebar from './Sidebar';
 import Editor from './components/Editor';
@@ -155,6 +156,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden font-sans">
+      <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm font-medium' }} />
       <Sidebar
         onFileSelect={openFileInTab}
         refreshTrigger={(lastSaved || 0) + sidebarRefresh} // COMBINED REFRESH TRIGGER

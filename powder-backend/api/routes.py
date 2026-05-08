@@ -708,7 +708,7 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     # A highly polished, modern CSS stylesheet for the Pentest Reports
     css = CSS(string="""
         @page { margin: 2cm; size: A4; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.6; word-wrap: break-word; }
         h1 { color: #0f172a; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; font-size: 28px;}
         h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-top: 30px;}
         h3 { color: #334155; margin-top: 25px;}
@@ -722,9 +722,12 @@ def generate_pdf_from_html(html_content: str) -> bytes:
         .status-rabbit { background-color: #94a3b8; }
         .status-action { background-color: #0ea5e9; }
         img { max-width: 100%; height: auto; border-radius: 6px; margin: 15px 0; border: 1px solid #e2e8f0; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 14px;}
-        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
-        th { background-color: #f1f5f9; font-weight: bold;}
+
+        /* --- FIXED TABLE CSS --- */
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 13px; table-layout: fixed; page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; hyphens: auto; }
+        th { background-color: #f1f5f9; font-weight: bold; }
     """)
     return HTML(string=html_content).write_pdf(stylesheets=[css])
 
