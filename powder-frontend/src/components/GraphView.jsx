@@ -3,7 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { getApiUrl } from '../config';
 import { Loader2 } from 'lucide-react';
 
-export default function GraphView({ onNodeClick }) {
+export default function GraphView({ onNodeClick, theme = 'dark' }) {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -18,7 +18,6 @@ export default function GraphView({ onNodeClick }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Make the canvas responsive
   useEffect(() => {
     const resize = () => {
       if (containerRef.current) {
@@ -30,17 +29,14 @@ export default function GraphView({ onNodeClick }) {
     };
     window.addEventListener('resize', resize);
     resize();
-
-    // Give layout a tiny buffer to settle before calculating width
     setTimeout(resize, 50);
     return () => window.removeEventListener('resize', resize);
   }, []);
 
   const handleNodeClick = useCallback((node) => {
     if (node.group === 'note') {
-      onNodeClick(node.id); // Open the note as a tab
+      onNodeClick(node.id);
     } else if (node.group === 'ghost') {
-      // Optional: Ask user if they want to create this ghost note
       alert(`Ghost Node: ${node.name} does not exist yet.`);
     }
   }, [onNodeClick]);
@@ -50,19 +46,21 @@ export default function GraphView({ onNodeClick }) {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#010409] rounded-xl overflow-hidden shadow-inner border border-gray-800">
+    // Dynamic background and border color for the container
+    <div ref={containerRef} className="w-full h-full bg-slate-50 dark:bg-[#010409] rounded-xl overflow-hidden shadow-inner border border-slate-300 dark:border-gray-800 transition-colors">
       <ForceGraph2D
         width={dimensions.width}
         height={dimensions.height}
         graphData={graphData}
         nodeLabel="name"
         nodeColor={node => {
-          if (node.group === 'note') return '#3b82f6'; // Blue for notes
-          if (node.group === 'tag') return '#10b981'; // Green for tags
-          return '#4b5563'; // Gray for ghost/uncreated links
+          if (node.group === 'note') return '#3b82f6';
+          if (node.group === 'tag') return '#10b981';
+          return '#94a3b8'; // Lighter gray for ghost nodes
         }}
         nodeRelSize={6}
-        linkColor={() => '#30363d'} // Subtle gray for connecting lines
+        // Dynamic link color based on theme
+        linkColor={() => theme === 'dark' ? '#30363d' : '#cbd5e1'}
         onNodeClick={handleNodeClick}
         enableNodeDrag={true}
         enableZoomPanInteraction={true}

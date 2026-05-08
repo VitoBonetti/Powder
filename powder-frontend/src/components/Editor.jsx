@@ -9,7 +9,7 @@ import { EditorView, Decoration, ViewPlugin, MatchDecorator, keymap } from '@cod
 import { autocompletion } from '@codemirror/autocomplete';
 import { BACKEND_URL, getApiUrl } from '../config';
 
-const customMarkdownStyle = HighlightStyle.define([
+const customMarkdownStyleDark = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#60a5fa" },
   { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#93c5fd" },
   { tag: t.heading3, fontSize: "1.5em", fontWeight: "bold", color: "#e2e8f0" },
@@ -19,10 +19,18 @@ const customMarkdownStyle = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: "line-through" },
 ]);
 
-export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate }) {
+const customMarkdownStyleLight = HighlightStyle.define([
+  { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#0284c7" },
+  { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#0369a1" },
+  { tag: t.heading3, fontSize: "1.5em", fontWeight: "bold", color: "#0f172a" },
+  { tag: t.heading4, fontSize: "1.2em", fontWeight: "bold", color: "#1e293b" },
+  { tag: t.strong, fontWeight: "bold", color: "#000000" },
+  { tag: t.emphasis, fontStyle: "italic", color: "#475569" },
+  { tag: t.strikethrough, textDecoration: "line-through" },
+]);
 
+export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate, theme = 'dark' }) {
 
-  // Image Upload Logic
   const uploadImage = (file, view, pos) => {
     const placeholder = `\n![Uploading ${file.name}...]()\n`;
     view.dispatch({ changes: { from: pos, insert: placeholder } });
@@ -47,7 +55,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     const wikiLinkDecorator = new MatchDecorator({
       regexp: /\[\[(.*?)\]\]/g,
       decoration: match => Decoration.mark({
-        class: 'cm-wiki-link text-purple-400 underline cursor-pointer hover:text-purple-300 transition-colors bg-purple-900/20 px-1 rounded',
+        class: 'cm-wiki-link text-purple-600 dark:text-purple-400 underline cursor-pointer hover:text-purple-800 dark:hover:text-purple-300 transition-colors bg-purple-100 dark:bg-purple-900/20 px-1 rounded',
         attributes: { 'data-target': match[1] }
       })
     });
@@ -55,8 +63,8 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     const tagDecorator = new MatchDecorator({
       regexp: /#([a-zA-Z0-9_-]+)/g,
       decoration: match => Decoration.mark({
-        class: 'cm-tag text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-900/40 hover:underline transition-colors',
-        attributes: { 'data-tag': match[0] } // captures the full #tag
+        class: 'cm-tag text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors',
+        attributes: { 'data-tag': match[0] }
       })
     });
 
@@ -70,108 +78,56 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       update(update) { this.decorations = wikiLinkDecorator.updateDeco(update, this.decorations); }
     }, { decorations: v => v.decorations });
 
-    const templateShortcut = keymap.of([
-      {
-        key: "Alt-t",
-        run: (view) => {
-          if (onOpenTemplate) onOpenTemplate(view);
-          return true; // Tells CodeMirror we handled the keystroke
-        }
-      }
-    ]);
+    const templateShortcut = keymap.of([{ key: "Alt-t", run: (view) => { if (onOpenTemplate) onOpenTemplate(view); return true; } }]);
 
-    // Tag Completion Source
     const tagCompletionSource = async (context) => {
       const word = context.matchBefore(/#[\w-]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
-
       try {
         const res = await fetch(getApiUrl('/tags'), { credentials: 'include' });
         const data = await res.json();
-
-        return {
-          from: word.from + 1, // Start replacing AFTER the '#'
-          options: data.map(t => ({
-            label: t.tag,
-            type: "keyword",
-            apply: t.tag + " "
-          })),
-          validFor: /^[\w-]*$/
-        };
-      } catch (err) {
-        return null;
-      }
+        return { from: word.from + 1, options: data.map(t => ({ label: t.tag, type: "keyword", apply: t.tag + " " })), validFor: /^[\w-]*$/ };
+      } catch (err) { return null; }
     };
 
-    // WikiLink Completion Source
     const wikiLinkCompletionSource = async (context) => {
       const word = context.matchBefore(/\[\[[^\]]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
-
       try {
         const res = await fetch(getApiUrl('/tree'), { credentials: 'include' });
         const tree = await res.json();
-
         const files = [];
         const extractFiles = (node) => {
-          if (node.type === 'file' && node.name.endsWith('.md')) {
-            files.push(node.name.replace('.md', ''));
-          }
+          if (node.type === 'file' && node.name.endsWith('.md')) files.push(node.name.replace('.md', ''));
           if (node.children) node.children.forEach(extractFiles);
         };
         extractFiles(tree);
-
-        return {
-          from: word.from + 2, // Start replacing AFTER the '[['
-          options: files.map(file => ({
-            label: file,
-            type: "text",
-            apply: file + "]] "
-          })),
-          validFor: /^[^\]]*$/
-        };
-      } catch (err) {
-        return null;
-      }
+        return { from: word.from + 2, options: files.map(file => ({ label: file, type: "text", apply: file + "]] " })), validFor: /^[^\]]*$/ };
+      } catch (err) { return null; }
     };
 
     return [
       markdown({ base: markdownLanguage, codeLanguages: languages }),
-      syntaxHighlighting(customMarkdownStyle),
+      syntaxHighlighting(theme === 'dark' ? customMarkdownStyleDark : customMarkdownStyleLight),
       wikiLinkPlugin,
       tagPlugin,
       templateShortcut,
       autocompletion({ override: [tagCompletionSource, wikiLinkCompletionSource] }),
       EditorView.lineWrapping,
-      EditorView.lineWrapping,
       EditorView.domEventHandlers({
         click(event) {
-          // Check for WikiLinks
           const linkEl = event.target.closest('.cm-wiki-link');
-          if (linkEl && linkEl.hasAttribute('data-target')) {
-            event.preventDefault();
-            onLinkClick(linkEl.getAttribute('data-target'));
-            return true;
-          }
-          // Check for Tags
+          if (linkEl && linkEl.hasAttribute('data-target')) { event.preventDefault(); onLinkClick(linkEl.getAttribute('data-target')); return true; }
           const tagEl = event.target.closest('.cm-tag');
-          if (tagEl && tagEl.hasAttribute('data-tag')) {
-            event.preventDefault();
-            onTagClick(tagEl.getAttribute('data-tag'));
-            return true;
-          }
+          if (tagEl && tagEl.hasAttribute('data-tag')) { event.preventDefault(); onTagClick(tagEl.getAttribute('data-tag')); return true; }
           return false;
         },
         paste(event, view) {
           const items = event.clipboardData?.items;
           for (const item of items || []) {
-            if (item.type.startsWith("image/")) {
-              event.preventDefault();
-              uploadImage(item.getAsFile(), view, view.state.selection.main.head);
-              return true;
-            }
+            if (item.type.startsWith("image/")) { event.preventDefault(); uploadImage(item.getAsFile(), view, view.state.selection.main.head); return true; }
           }
           return false;
         },
@@ -191,15 +147,16 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         }
       })
     ];
-  }, [onLinkClick, onTagClick, onOpenTemplate]);
+  }, [onLinkClick, onTagClick, onOpenTemplate, theme]);
 
   return (
     <CodeMirror
       value={content}
-      theme={vscodeDark}
+      // Switch CodeMirror native theme based on our app state
+      theme={theme === 'dark' ? vscodeDark : 'light'}
       extensions={editorExtensions}
       onChange={onChange}
-      className="text-lg powder-editor pb-20"
+      className="text-lg powder-editor pb-20 transition-colors"
       basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
     />
   );
