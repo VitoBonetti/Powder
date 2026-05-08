@@ -264,52 +264,52 @@ async def create_flow_node(request: Request, user: str = Depends(verify_access))
     meta_tags = node.get("meta_tags", {})
     node_type = node.get("type", "actionNode")
 
-    conn = get_db()
-    conn.row_factory = sqlite3.Row
-
-    # FIX & IMPROVEMENT: CREATE PROJECT FOLDERS
+    # 1. READ DB (Open and close quickly)
     if node_type == "triggerNode":
-        # 1. Create a dedicated folder for this test
         folder_path = f"_Flows/{safe_title}_{short_id}"
         try:
             file_system.create_folder(folder_path)
-        except Exception:
+        except:
             pass
         file_path = f"{folder_path}/_Scope.md"
     else:
-        # 2. Put action nodes inside their parent test's folder
         engagement_id = meta_tags.get("engagement_id")
         parent_folder = "_Flows"
         if engagement_id:
-            cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (engagement_id,))
-            parent_row = cursor.fetchone()
-            if parent_row:
-                # Extract the folder path from the parent's file path
-                parent_folder = parent_row["file_path"].rsplit('/', 1)[0]
+            conn = get_db()
+            try:
+                cursor = conn.execute("SELECT file_path FROM flow_nodes WHERE id=?", (engagement_id,))
+                parent_row = cursor.fetchone()
+                if parent_row:
+                    parent_folder = parent_row[0].rsplit('/', 1)[0]
+            finally:
+                conn.close()  # Close immediately!
 
         file_path = f"{parent_folder}/{safe_title}_{short_id}.md"
 
-    # Pre-populate the note
+    # 2. FILE SYSTEM OPERATIONS (Runs safely outside parent DB lock)
     command = node.get("command", "")
     status = node.get("status", "action")
     initial_content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {node.get('title', 'Node')}\n\n"
     if node_type != "stickyNote":
-        if command:
-            initial_content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
+        if command: initial_content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
         initial_content += "## Notes & Evidence\n"
 
     file_system.save_note_content(file_path, initial_content)
 
-    # Save the pointer to SQLite
-    conn.execute("""
-        INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        node_id, node.get("title"), node_type, command, status,
-        node.get("position_x", 0), node.get("position_y", 0), file_path, json.dumps(meta_tags)
-    ))
-    conn.commit()
-    conn.close()
+    # 3. WRITE DB
+    conn = get_db()
+    try:
+        conn.execute("""
+            INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            node_id, node.get("title"), node_type, command, status,
+            node.get("position_x", 0), node.get("position_y", 0), file_path, json.dumps(meta_tags)
+        ))
+        conn.commit()
+    finally:
+        conn.close()
 
     node["id"] = node_id
     node["file_path"] = file_path
@@ -319,32 +319,32 @@ async def create_flow_node(request: Request, user: str = Depends(verify_access))
 @router.put("/flow/nodes/{node_id}")
 async def update_flow_node(node_id: str, request: Request, user: str = Depends(verify_access)):
     node = await request.json()
+
+    # 1. READ DB
     conn = get_db()
     conn.row_factory = sqlite3.Row
-
-    cursor = conn.execute("SELECT title, file_path FROM flow_nodes WHERE id=?", (node_id,))
-    current_node = cursor.fetchone()
-    if not current_node:
+    try:
+        cursor = conn.execute("SELECT title, file_path FROM flow_nodes WHERE id=?", (node_id,))
+        current_node = cursor.fetchone()
+    finally:
         conn.close()
+
+    if not current_node:
         raise HTTPException(status_code=404, detail="Node not found")
 
     current_title = current_node["title"]
     file_path = current_node["file_path"]
     new_title = node.get("title", current_title)
 
-    # HANDLE FILE RENAMING FROM CANVAS
+    # 2. FILE SYSTEM OPERATIONS
     if new_title != current_title:
         safe_title = re.sub(r'[^\w\s-]', '', new_title).strip().replace(' ', '_')
-        # Keep it in the same folder, just change the filename
-        folder_path = file_path.rsplit('/', 1)[0]
         new_filename = f"{safe_title}_{node_id[:8]}.md"
         try:
-            # We must pass the old full path, and the new ONLY filename
             file_path = file_system.rename_item(file_path, new_filename)
         except Exception as e:
             print(f"Rename failed: {e}")
 
-    # RECONSTRUCT AND SAVE THE MARKDOWN
     node_type = node.get("type", "actionNode")
     status = node.get("status", "action")
     command = node.get("command", "")
@@ -355,24 +355,26 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
     if node_type == "stickyNote":
         content += note_text
     else:
-        if command:
-            content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
+        if command: content += f"**Command:**\n```bash\n{command}\n```\n\n---\n\n"
         content += f"## Notes & Evidence\n{markdown_result}"
 
     file_system.save_note_content(file_path, content)
 
-    # Update Database
-    conn.execute("""
-        UPDATE flow_nodes 
-        SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=?
-        WHERE id=?
-    """, (
-        new_title, node_type, command, status,
-        node.get("position_x"), node.get("position_y"), json.dumps(node.get("meta_tags", {})),
-        file_path, node_id
-    ))
-    conn.commit()
-    conn.close()
+    # 3. WRITE DB
+    conn = get_db()
+    try:
+        conn.execute("""
+            UPDATE flow_nodes 
+            SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=?
+            WHERE id=?
+        """, (
+            new_title, node_type, command, status,
+            node.get("position_x"), node.get("position_y"), json.dumps(node.get("meta_tags", {})),
+            file_path, node_id
+        ))
+        conn.commit()
+    finally:
+        conn.close()
 
     node["file_path"] = file_path
     return node
@@ -380,52 +382,54 @@ async def update_flow_node(node_id: str, request: Request, user: str = Depends(v
 
 @router.delete("/flow/nodes/{node_id}")
 def delete_flow_node(node_id: str, user: str = Depends(verify_access)):
+    # 1. READ DB
     conn = get_db()
     conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute("SELECT type, file_path FROM flow_nodes WHERE id=?", (node_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {"status": "already_deleted"}
 
-    cursor = conn.execute("SELECT type, file_path FROM flow_nodes WHERE id=?", (node_id,))
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        return {"status": "already_deleted"}
+        node_type = row["type"]
+        file_path = row["file_path"]
+        to_delete = [node_id]
 
-    node_type = row["type"]
-    file_path = row["file_path"]
+        if node_type == "triggerNode":
+            cursor = conn.execute("SELECT id, meta_tags FROM flow_nodes")
+            for r in cursor.fetchall():
+                try:
+                    mt = json.loads(r["meta_tags"])
+                    if mt.get("engagement_id") == node_id:
+                        to_delete.append(r["id"])
+                except Exception:
+                    pass
+    finally:
+        conn.close()  # Close DB before running deletions!
 
-    # FIX: DEEP DELETION FOR ENTIRE PROJECTS
+    # 2. FILE SYSTEM OPERATIONS
     if node_type == "triggerNode":
-        # 1. Delete the entire folder from the Vault
         folder_path = file_path.rsplit('/', 1)[0]
         try:
             file_system.delete_item(folder_path)
-        except Exception as e:
-            print(f"Failed to delete folder: {e}")
-
-        # 2. Find all child nodes to delete from SQLite
-        cursor = conn.execute("SELECT id, meta_tags FROM flow_nodes")
-        to_delete = [node_id]
-        for r in cursor.fetchall():
-            try:
-                mt = json.loads(r["meta_tags"])
-                if mt.get("engagement_id") == node_id:
-                    to_delete.append(r["id"])
-            except Exception:
-                pass
-
-        for tid in to_delete:
-            conn.execute("DELETE FROM flow_nodes WHERE id=?", (tid,))
-            conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (tid, tid))
+        except Exception:
+            pass
     else:
-        # Standard single node deletion
         try:
             file_system.delete_item(file_path)
         except Exception:
             pass
-        conn.execute("DELETE FROM flow_nodes WHERE id=?", (node_id,))
-        conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (node_id, node_id))
 
-    conn.commit()
-    conn.close()
+    # 3. WRITE DB
+    conn = get_db()
+    try:
+        for tid in to_delete:
+            conn.execute("DELETE FROM flow_nodes WHERE id=?", (tid,))
+            conn.execute("DELETE FROM flow_edges WHERE source=? OR target=?", (tid, tid))
+        conn.commit()
+    finally:
+        conn.close()
+
     return {"status": "deleted"}
 
 
@@ -577,7 +581,6 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
             nodes_data = parsed_data if isinstance(parsed_data, list) else parsed_data.get("nodes", [])
             edges_data = [] if isinstance(parsed_data, list) else parsed_data.get("edges", [])
 
-            # Backward Compatibility: Auto-migrate edges from old parent_id meta tags
             if isinstance(parsed_data, list):
                 for node in nodes_data:
                     parent_id = node.get("meta_tags", {}).get("parent_id")
@@ -586,10 +589,7 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
                             {"id": f"e-{parent_id}-{node['id']}", "source": str(parent_id), "target": str(node["id"]),
                              "label": ""})
 
-            conn = get_db()
-            conn.row_factory = sqlite3.Row
-
-            # 1. Process trigger node to establish the Project Folder
+            # 1. Setup Folders
             folder_path = ""
             trigger_node = next((n for n in nodes_data if n.get("type") == "triggerNode"), None)
 
@@ -598,36 +598,30 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
                 safe_title = re.sub(r'[^\w\s-]', '', trigger_node.get("title", "Imported_Test")).strip().replace(' ',
                                                                                                                  '_')
                 folder_path = f"_Flows/{safe_title}_{imported_engagement_id[:8]}"
-                try:
-                    file_system.create_folder(folder_path)
-                except:
-                    pass
             else:
-                # Fallback if ZIP has no trigger node
                 imported_engagement_id = str(uuid.uuid4())
                 folder_path = f"_Flows/Imported_{int(time.time())}"
-                try:
-                    file_system.create_folder(folder_path)
-                except:
-                    pass
 
-            # 2. Extract Images securely into the new project's isolated assets folder
+            try:
+                file_system.create_folder(folder_path)
+            except:
+                pass
+
+            # 2. Extract Images securely
             assets_dir = VAULT_DIR / folder_path / "assets"
             assets_dir.mkdir(parents=True, exist_ok=True)
 
-            image_map = {}  # Maps old filenames to new secure URLs
+            image_map = {}
             for name in zip_file.namelist():
                 if (name.startswith("uploads/") or name.startswith("assets/")) and not name.endswith("/"):
                     filename = name.split("/")[-1]
                     file_data = zip_file.read(name)
-                    # Add timestamp to prevent collisions
                     safe_filename = f"{int(time.time())}_{filename}"
                     with open(assets_dir / safe_filename, "wb") as f:
                         f.write(file_data)
-                    # Save the mapping for the markdown rewrite
                     image_map[filename] = f"/api/flow/images/{folder_path}/assets/{safe_filename}"
 
-            # 3. Process Nodes (Recreate Markdown files + DB Entries)
+            # 3. PRE-PROCESS NODES (File IO safely completely outside of Database scope)
             for node in nodes_data:
                 node_id = node["id"]
                 title = node.get("title", "Imported Node")
@@ -636,17 +630,13 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
                 command = node.get("command", "")
                 md_res = node.get("markdown_result", "")
 
-                # REWRITE IMAGE LINKS: Swap old /uploads/ or old /assets/ with the newly extracted path
                 for old_img, new_img in image_map.items():
-                    # Catch legacy paths
                     md_res = re.sub(r'/uploads/' + re.escape(old_img), new_img, md_res)
-                    # Catch previous Powder paths
                     md_res = re.sub(r'/api/flow/images/[a-zA-Z0-9_./-]+/assets/' + re.escape(old_img), new_img, md_res)
 
                 safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
                 file_path = f"{folder_path}/{safe_title}_{node_id[:8]}.md"
 
-                # Build the Markdown file
                 content = f"---\ntype: {node_type}\nstatus: {status}\n---\n\n# {title}\n\n"
                 if node_type == "stickyNote":
                     content += node.get("note", "")
@@ -656,35 +646,43 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
 
                 file_system.save_note_content(file_path, content)
 
-                meta_tags = node.get("meta_tags", {})
-                meta_tags.pop("parent_id", None)
+                # Save computed path for the DB phase
+                node["_file_path"] = file_path
 
-                # Upsert into SQLite
-                cursor = conn.execute("SELECT id FROM flow_nodes WHERE id=?", (node_id,))
-                if cursor.fetchone():
-                    conn.execute("""
-                        UPDATE flow_nodes SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=? WHERE id=?
-                    """, (title, node_type, command, status, node.get("position_x", 0), node.get("position_y", 0),
-                          json.dumps(meta_tags), file_path, node_id))
-                else:
-                    conn.execute("""
-                        INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (node_id, title, node_type, command, status, node.get("position_x", 0),
-                          node.get("position_y", 0), file_path, json.dumps(meta_tags)))
+            # 4. PROCESS DB ENTRIES (All File IO is completely finished)
+            conn = get_db()
+            try:
+                for node in nodes_data:
+                    meta_tags = node.get("meta_tags", {})
+                    meta_tags.pop("parent_id", None)
 
-            # 4. Process Edges
-            for edge in edges_data:
-                cursor = conn.execute("SELECT id FROM flow_edges WHERE id=?", (edge["id"],))
-                if cursor.fetchone():
-                    conn.execute("UPDATE flow_edges SET source=?, target=?, label=? WHERE id=?",
-                                 (edge.get("source"), edge.get("target"), edge.get("label"), edge["id"]))
-                else:
-                    conn.execute("INSERT INTO flow_edges (id, source, target, label) VALUES (?, ?, ?, ?)",
-                                 (edge["id"], edge.get("source"), edge.get("target"), edge.get("label")))
+                    cursor = conn.execute("SELECT id FROM flow_nodes WHERE id=?", (node["id"],))
+                    if cursor.fetchone():
+                        conn.execute("""
+                            UPDATE flow_nodes SET title=?, type=?, command=?, status=?, position_x=?, position_y=?, meta_tags=?, file_path=? WHERE id=?
+                        """, (node.get("title"), node.get("type"), node.get("command"), node.get("status"),
+                              node.get("position_x", 0), node.get("position_y", 0), json.dumps(meta_tags),
+                              node["_file_path"], node["id"]))
+                    else:
+                        conn.execute("""
+                            INSERT INTO flow_nodes (id, title, type, command, status, position_x, position_y, file_path, meta_tags)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (node["id"], node.get("title"), node.get("type"), node.get("command"), node.get("status"),
+                              node.get("position_x", 0), node.get("position_y", 0), node["_file_path"],
+                              json.dumps(meta_tags)))
 
-            conn.commit()
-            conn.close()
+                for edge in edges_data:
+                    cursor = conn.execute("SELECT id FROM flow_edges WHERE id=?", (edge["id"],))
+                    if cursor.fetchone():
+                        conn.execute("UPDATE flow_edges SET source=?, target=?, label=? WHERE id=?",
+                                     (edge.get("source"), edge.get("target"), edge.get("label"), edge["id"]))
+                    else:
+                        conn.execute("INSERT INTO flow_edges (id, source, target, label) VALUES (?, ?, ?, ?)",
+                                     (edge["id"], edge.get("source"), edge.get("target"), edge.get("label")))
+
+                conn.commit()
+            finally:
+                conn.close()
 
         return {
             "message": "Project imported successfully!",
