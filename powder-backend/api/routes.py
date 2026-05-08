@@ -1003,6 +1003,9 @@ def delete_tool(tool_id: str, user: str = Depends(verify_access)):
 
 # Create a helper function to zip folders in memory
 def stream_zip(folder_path: str, zip_filename: str):
+    print(f"Checking folder: {folder_path}")
+    print(f"Exists: {os.path.exists(folder_path)}")
+    print(f"Contents of /extensions: {os.listdir('/extensions') if os.path.exists('/extensions') else 'missing'}")
     if not os.path.exists(folder_path):
         raise HTTPException(status_code=404, detail=f"Folder {folder_path} not found on server.")
 
@@ -1030,15 +1033,13 @@ def stream_zip(folder_path: str, zip_filename: str):
 
 # --- Add these routes to your FastAPI app ---
 
-@router.get("/api/download/clipper")  # Use @router.get if you are in routes.py
+@router.get("/api/download/clipper")  #
 def download_clipper(user: str = Depends(verify_access)):
-    # Adjust this path based on where powder-clipper is relative to your backend script
     folder_path = "/extensions/powder-clipper"
     return stream_zip(folder_path, "powder-clipper.zip")
 
 
-@router.get("/api/download/cli")  # Use @router.get if you are in routes.py
+@router.get("/api/download/cli")
 def download_cli(user: str = Depends(verify_access)):
-    # Adjust this path based on where powder-cli is relative to your backend script
     folder_path = "/extensions/powder-cli"
     return stream_zip(folder_path, "powder-cli.zip")
