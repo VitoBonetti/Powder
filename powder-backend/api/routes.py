@@ -731,7 +731,6 @@ def generate_pdf_from_html(html_content: str) -> bytes:
 
 def prepare_markdown_for_pdf(md_text: str) -> str:
     """Translates API image routes into absolute local file paths so Weasyprint can render them."""
-    from services.file_system import VAULT_DIR
     def repl(match):
         prefix = match.group(1)
         rel_path = match.group(2)
