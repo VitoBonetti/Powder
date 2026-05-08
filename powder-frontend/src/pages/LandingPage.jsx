@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { getApiUrl } from '../config';
 import { useProjectImport } from '../hooks/useProjectImport';
 
-export default function LandingPage({ onSelectEngagement }) {
+export default function LandingPage({ onSelectEngagement, onFlowChange }) {
   const [recentEngagements, setRecentEngagements] = useState([]);
   const [engagementName, setEngagementName] = useState('');
   const [testType, setTestType] = useState('Adversary Simulation');
@@ -15,7 +15,6 @@ export default function LandingPage({ onSelectEngagement }) {
   const [urlsList, setUrlsList] = useState(['']);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, title: '' });
 
-  // Native fetch wrapper to replace axios
   const apiCall = async (endpoint, method = 'GET', body = null) => {
     const options = {
       method,
@@ -29,7 +28,8 @@ export default function LandingPage({ onSelectEngagement }) {
   };
 
   const { importFileRef, handleImportZip } = useProjectImport(() => {
-    fetchEngagements(); // Refresh the list if an import succeeds
+    fetchEngagements();
+    if (onFlowChange) onFlowChange();
   });
 
   const fetchEngagements = () => {
@@ -81,6 +81,7 @@ export default function LandingPage({ onSelectEngagement }) {
         }
       });
       toast.success('Engagement created!');
+      if (onFlowChange) onFlowChange(); // SYNC BRIDGE
       onSelectEngagement(response.id);
     } catch (error) { toast.error('Failed to create engagement.'); }
   };
@@ -95,11 +96,11 @@ export default function LandingPage({ onSelectEngagement }) {
       await apiCall(`/flow/nodes/${deleteModal.id}`, 'DELETE');
       setRecentEngagements(prev => prev.filter(eng => eng.id !== deleteModal.id));
       toast.success('Engagement deleted');
+      if (onFlowChange) onFlowChange(); // SYNC BRIDGE
       setDeleteModal({ isOpen: false, id: null, title: '' });
     } catch (error) { toast.error('Failed to delete.'); }
   };
 
-  // --- STYLES (Light/Fresh Theme) ---
   const pageStyle = { display: 'flex', justifyContent: 'center', alignItems: 'flex-start', minHeight: '100vh', backgroundColor: '#f8fafc', color: '#334155', fontFamily: 'system-ui, sans-serif', padding: '40px', gap: '40px', position: 'relative' };
   const cardStyle = { backgroundColor: '#ffffff', padding: '40px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)' };
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', color: '#0f172a', boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' };

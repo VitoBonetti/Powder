@@ -16,8 +16,13 @@ import { Eye, Edit3, Columns, Network, CheckCircle2, Loader2, Search, AlertCircl
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
   const [appMode, setAppMode] = useState('vault'); // 'vault' | 'flow-landing' | 'flow-canvas'
   const [activeEngagementId, setActiveEngagementId] = useState(null);
+
+  // NEW: Global Sync Bridge State
+  const [sidebarRefresh, setSidebarRefresh] = useState(0);
+
   const [content, setContent] = useState("");
   const [viewMode, setViewMode] = useState('edit');
   const [activeFile, setActiveFile] = useState(null);
@@ -25,9 +30,8 @@ function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState("");
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const editorViewRef = useRef(null);;
+  const editorViewRef = useRef(null);
 
-  // Handle Global Commands dispatched from the Omnibar
   const handleGlobalCommand = async (commandId) => {
     switch(commandId) {
       case 'cmd-logout':
@@ -38,7 +42,7 @@ function App() {
         break;
       case 'cmd-reindex':
         fetch(getApiUrl('/reindex'), { method: 'POST', credentials: 'include' })
-          .then(() => alert("Database successfully rebuilt!"))
+          .then(() => { alert("Database successfully rebuilt!"); setSidebarRefresh(Date.now()); })
           .catch(err => alert("Failed to rebuild: " + err));
         break;
       case 'cmd-settings':
@@ -55,13 +59,11 @@ function App() {
     setIsSearchOpen(true);
   }, []);
 
-  // Opens the modal and saves the Editor engine reference
   const handleOpenTemplateModal = useCallback((view) => {
     editorViewRef.current = view;
     setIsTemplateModalOpen(true);
   }, []);
 
-  // Fetches the template and injects it exactly at the cursor
   const handleInsertTemplate = async (templateName) => {
     setIsTemplateModalOpen(false);
     if (!editorViewRef.current) return;
@@ -89,7 +91,6 @@ function App() {
   const isImageFile = activeFile && activeFile.match(/\.(png|jpe?g|gif|webp|svg)$/i);
   const { saveStatus, setSaveStatus, lastSaved } = useAutoSave(content, activeFile, isImageFile);
 
-  // Auth check
   useEffect(() => {
     fetch(getApiUrl('/auth/me'), { credentials: 'include' })
       .then(res => setIsAuthenticated(res.ok))
@@ -97,7 +98,6 @@ function App() {
       .finally(() => setIsLoadingAuth(false));
   }, []);
 
-  // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setIsSearchOpen(true); }
@@ -107,7 +107,6 @@ function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Fetch file content when tab changes
   useEffect(() => {
     if (!activeFile) { setContent(""); return; }
     if (isImageFile) { setSaveStatus("saved"); return; }
@@ -158,7 +157,7 @@ function App() {
     <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] overflow-hidden font-sans">
       <Sidebar
         onFileSelect={openFileInTab}
-        refreshTrigger={lastSaved}
+        refreshTrigger={(lastSaved || 0) + sidebarRefresh} // COMBINED REFRESH TRIGGER
         onTagClick={handleTagClick}
         onFileDelete={handleFileDelete}
         onFileRename={handleFileRename}
@@ -166,19 +165,24 @@ function App() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-
-        {/* RENDER THE ACTIVE APP MODE */}
         {appMode === 'flow-landing' ? (
           <div className="h-full overflow-y-auto">
-            <LandingPage onSelectEngagement={(id) => { setActiveEngagementId(id); setAppMode('flow-canvas'); }} />
+            <LandingPage
+              onSelectEngagement={(id) => { setActiveEngagementId(id); setAppMode('flow-canvas'); }}
+              onFlowChange={() => setSidebarRefresh(Date.now())}
+            />
           </div>
         ) : appMode === 'flow-canvas' ? (
-           <CanvasPage engagementId={activeEngagementId} onBack={() => setAppMode('flow-landing')} />
+           <CanvasPage
+             engagementId={activeEngagementId}
+             onBack={() => setAppMode('flow-landing')}
+             onNodeOpen={openFileInTab}
+             onFlowChange={() => setSidebarRefresh(Date.now())}
+           />
         ) : (
           <>
             <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} />
 
-            {/* Floating View Mode Toolbar */}
             {activeFile && !isImageFile && (
               <div className="absolute bottom-8 right-8 z-20 flex bg-[#161b22] border border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-opacity">
                 <button onClick={() => setViewMode('edit')} title="Edit Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'edit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}> <Edit3 className="w-4 h-4" /> </button>
@@ -189,7 +193,6 @@ function App() {
               </div>
             )}
 
-            {/* The Content Layout Engine */}
             <div className="flex-1 overflow-hidden p-4">
               {viewMode === 'graph' ? (
                 <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
