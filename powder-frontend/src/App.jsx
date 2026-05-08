@@ -30,6 +30,14 @@ function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const editorViewRef = useRef(null);
 
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
   const handleGlobalCommand = async (commandId) => {
     switch(commandId) {
       case 'cmd-logout':
@@ -152,8 +160,7 @@ function App() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <div className={theme}>
-      <div className="flex h-screen bg-slate-50 dark:bg-[#0d1117] text-slate-900 dark:text-[#c9d1d9] overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex h-screen bg-slate-50 dark:bg-[#0d1117] text-slate-900 dark:text-[#c9d1d9] overflow-hidden font-sans transition-colors duration-200">
         <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm font-medium' }} />
         <Sidebar
           onFileSelect={openFileInTab}
@@ -244,7 +251,6 @@ function App() {
         <SearchModal isOpen={isSearchOpen} onClose={() => { setIsSearchOpen(false); setSearchInitialQuery(""); }} onSelect={openFileInTab} onCommand={handleGlobalCommand} initialQuery={searchInitialQuery} theme={theme} />
         <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} onSelect={handleInsertTemplate} theme={theme} />
       </div>
-    </div>
   );
 }
 
