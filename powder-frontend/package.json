@@ -27,6 +27,7 @@
     "react-dom": "^19.2.5",
     "react-force-graph-2d": "^1.29.1",
     "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.15.0",
     "remark-gfm": "^4.0.1",
     "remark-github-blockquote-alert": "^2.1.0"
   },
