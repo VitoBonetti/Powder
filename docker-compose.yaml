@@ -14,3 +14,5 @@ services:
     volumes:
       - ./vault_data:/app/powder-backend/vault
       - ./vault_security.db:/app/powder-backend/vault_security.db
+      - ./powder-clipper:/extensions/powder-clipper:ro
+      - ./powder-cli:/extensions/powder-cli:ro

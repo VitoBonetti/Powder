@@ -1033,12 +1033,12 @@ def stream_zip(folder_path: str, zip_filename: str):
 @router.get("/api/download/clipper")  # Use @router.get if you are in routes.py
 def download_clipper(user: str = Depends(verify_access)):
     # Adjust this path based on where powder-clipper is relative to your backend script
-    folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "powder-clipper"))
+    folder_path = "/extensions/powder-clipper"
     return stream_zip(folder_path, "powder-clipper.zip")
 
 
 @router.get("/api/download/cli")  # Use @router.get if you are in routes.py
 def download_cli(user: str = Depends(verify_access)):
     # Adjust this path based on where powder-cli is relative to your backend script
-    folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "powder-cli"))
+    folder_path = "/extensions/powder-cli"
     return stream_zip(folder_path, "powder-cli.zip")
