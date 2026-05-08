@@ -43,7 +43,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     setEdges(eds => eds.filter(e => !ids.includes(e.source) && !ids.includes(e.target)));
 
     nodesToDelete.forEach(node => {
-      fetch(getApiUrl(`/notes/${node.id}`), { method: 'DELETE', credentials: 'include' }).catch(err => console.error("Failed to delete file:", err));
+      fetch(getApiUrl(`/notes/${node.id}`), { method: 'DELETE', credentials: 'include' })
+          .then(() => window.dispatchEvent(new CustomEvent('refresh-sidebar')))
+          .catch(err => console.error("Failed to delete file:", err));
       if (selectedFileRef.current === node.id) setSelectedFile(null);
     });
   }, []);
@@ -178,10 +180,13 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   const handleEditorChange = (newTextWithoutYaml) => {
     const match = fileContent.match(/^---\n([\s\S]*?)\n---\n*/);
     const yaml = match ? match[0] : '';
-    // Double newline prevents H1 markdown bug!
     const fullNewContent = yaml ? `${yaml}\n\n${newTextWithoutYaml}` : newTextWithoutYaml;
+
     setFileContent(fullNewContent);
     fetch(getApiUrl(`/notes/${selectedFile}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: fullNewContent }) });
+
+    // CRITICAL FIX: Instantly update the text on the Canvas node so you see it immediately!
+    setNodes(nds => nds.map(n => n.id === selectedFile ? { ...n, data: { ...n.data, note: fullNewContent } } : n));
   };
 
   const displayContent = useMemo(() => fileContent.replace(/^---\n([\s\S]*?)\n---\n*/, ''), [fileContent]);
@@ -212,7 +217,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     frontmatter += `---\n\n# ${newNodeName.trim()}\n`;
 
     fetch(getApiUrl(`/notes/${targetPath}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: frontmatter }) }).then(() => {
-      window.dispatchEvent(new CustomEvent('trigger-sidebar-refresh'));
+      window.dispatchEvent(new CustomEvent('refresh-sidebar'));
       if (modalConfig.quickAddSource) fetch(getApiUrl('/canvas/edge'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source: modalConfig.quickAddSource.id, target: targetPath }) });
       setModalConfig({ isOpen: false, type: '', title: '', quickAddSource: null });
       if (nodeType === 'starting_node') { if (setActiveFile) setActiveFile(targetPath); else window.location.reload(); } else { fetchCanvasData(); }
@@ -283,14 +288,9 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   // save dimensions as clean numbers to the YAML
   const saveStickyNote = async (nodeId, newText, newColor, w, h) => {
     try {
-      // Instantly update UI dimensions AND the text inside the React Flow nodes array
-      setNodes(nds => nds.map(n => {
-        if (n.id === nodeId) {
-          const newStyle = w !== undefined && h !== undefined ? { ...n.style, width: w, height: h } : n.style;
-          return { ...n, style: newStyle, data: { ...n.data, color: newColor, note: newText } };
-        }
-        return n;
-      }));
+      if (w !== undefined && h !== undefined) {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, style: { ...n.style, width: w, height: h } } : n));
+      }
 
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
@@ -304,7 +304,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         }
         const newContent = `---\n${yaml}\n---\n\n${newText}`;
 
-        // If this note is open in the right drawer, update it instantly!
+        // CRITICAL FIX: If this note is open in the right panel, update the panel instantly!
         if (selectedFileRef.current === nodeId) {
           setFileContent(newContent);
         }

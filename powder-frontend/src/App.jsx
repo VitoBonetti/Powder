@@ -26,11 +26,11 @@ function App() {
   const editorViewRef = useRef(null);
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
-  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  const [sidebarRefresh, setSidebarRefresh] = useState(0);
   useEffect(() => {
-    const handleRefresh = () => setSidebarRefreshKey(prev => prev + 1);
-    window.addEventListener('trigger-sidebar-refresh', handleRefresh);
-    return () => window.removeEventListener('trigger-sidebar-refresh', handleRefresh);
+    const handler = () => setSidebarRefresh(prev => prev + 1);
+    window.addEventListener('refresh-sidebar', handler);
+    return () => window.removeEventListener('refresh-sidebar', handler);
   }, []);
 
   // Handle Global Commands dispatched from the Omnibar
@@ -186,7 +186,7 @@ function App() {
 
       {!isSidebarHidden && (
         <div className="w-64 border-r border-gray-800 bg-[#0d1117] flex-shrink-0 transition-all">
-          <Sidebar onFileSelect={openFileInTab} refreshTrigger={`${lastSaved}-${sidebarRefreshKey}`} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
+          <Sidebar onFileSelect={openFileInTab} refreshTrigger={`${lastSaved}-${sidebarRefresh}`} onTagClick={handleTagClick} onFileDelete={handleFileDelete} onFileRename={handleFileRename} />
         </div>
       )}
 
