@@ -208,7 +208,7 @@ function App() {
               <div className="flex-1 overflow-hidden p-4">
                 {viewMode === 'graph' ? (
                   <div className="h-full w-full max-w-[1600px] mx-auto pb-4">
-                    <GraphView onNodeClick={(path) => { openFileInTab(path); setViewMode('edit'); }} />
+                    <GraphView onNodeClick={(path) => { openFileInTab(path); setViewMode('edit'); }} theme={theme} />
                   </div>
                 ) : !activeFile ? (
                   <div className="h-full flex flex-col items-center justify-center text-gray-500">
@@ -228,19 +228,19 @@ function App() {
                 ) : viewMode === 'split' ? (
                   <div className="flex h-full gap-6">
                     <div className="flex-1 overflow-y-auto border-r border-gray-800 pr-4 hide-scroll">
-                      <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+                      <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} theme={theme}/>
                     </div>
                     <div className="flex-1 overflow-y-auto pl-2 hide-scroll">
-                      <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+                      <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} theme={theme}/>
                     </div>
                   </div>
                 ) : viewMode === 'preview' ? (
                   <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
-                    <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick} />
+                    <Preview content={content} onLinkClick={handleLinkClick} onTagClick={handleTagClick}theme={theme}/>
                   </div>
                 ) : (
                   <div className="h-full overflow-y-auto w-full max-w-[1400px] mx-auto px-8 py-6">
-                    <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} />
+                    <Editor content={content} onChange={setContent} onLinkClick={handleLinkClick} onTagClick={handleTagClick} onOpenTemplate={handleOpenTemplateModal} theme={theme}/>
                   </div>
                 )}
               </div>
