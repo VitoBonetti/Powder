@@ -212,6 +212,7 @@ export default function CanvasView({ activeFile, setActiveFile }) {
     frontmatter += `---\n\n# ${newNodeName.trim()}\n`;
 
     fetch(getApiUrl(`/notes/${targetPath}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: frontmatter }) }).then(() => {
+      window.dispatchEvent(new CustomEvent('trigger-sidebar-refresh'));
       if (modalConfig.quickAddSource) fetch(getApiUrl('/canvas/edge'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ source: modalConfig.quickAddSource.id, target: targetPath }) });
       setModalConfig({ isOpen: false, type: '', title: '', quickAddSource: null });
       if (nodeType === 'starting_node') { if (setActiveFile) setActiveFile(targetPath); else window.location.reload(); } else { fetchCanvasData(); }
@@ -282,9 +283,15 @@ export default function CanvasView({ activeFile, setActiveFile }) {
   // save dimensions as clean numbers to the YAML
   const saveStickyNote = async (nodeId, newText, newColor, w, h) => {
     try {
-      if (w !== undefined && h !== undefined) {
-        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, style: { ...n.style, width: w, height: h } } : n));
-      }
+      // Instantly update UI dimensions AND the text inside the React Flow nodes array
+      setNodes(nds => nds.map(n => {
+        if (n.id === nodeId) {
+          const newStyle = w !== undefined && h !== undefined ? { ...n.style, width: w, height: h } : n.style;
+          return { ...n, style: newStyle, data: { ...n.data, color: newColor, note: newText } };
+        }
+        return n;
+      }));
+
       const res = await fetch(getApiUrl(`/notes/${nodeId}`), { credentials: 'include' });
       const data = await res.json();
       const match = data.content.match(/^---\n([\s\S]*?)\n---/);
@@ -292,11 +299,16 @@ export default function CanvasView({ activeFile, setActiveFile }) {
         let yaml = match[1];
         if (/^color:.*$/m.test(yaml)) yaml = yaml.replace(/^color:.*$/m, `color: "${newColor}"`); else yaml += `\ncolor: "${newColor}"`;
         if (w !== undefined) {
-           // Save as pure numbers so backend parses it easily
            if (/^width:.*$/m.test(yaml)) yaml = yaml.replace(/^width:.*$/m, `width: ${w}`); else yaml += `\nwidth: ${w}`;
            if (/^height:.*$/m.test(yaml)) yaml = yaml.replace(/^height:.*$/m, `height: ${h}`); else yaml += `\nheight: ${h}`;
         }
         const newContent = `---\n${yaml}\n---\n\n${newText}`;
+
+        // If this note is open in the right drawer, update it instantly!
+        if (selectedFileRef.current === nodeId) {
+          setFileContent(newContent);
+        }
+
         await fetch(getApiUrl(`/notes/${nodeId}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ content: newContent }) });
       }
     } catch (err) { console.error("Failed to save sticky note", err); }
