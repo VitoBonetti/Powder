@@ -11,6 +11,8 @@ from parser import route_and_parse
 import os
 import asyncio
 from database import sync_search_index, get_db
+from datetime import datetime
+import markdown2
 import uuid
 import json
 import re
@@ -691,3 +693,203 @@ async def import_project(file: UploadFile = File(...), user: str = Depends(verif
 
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Invalid zip file format")
+
+
+# ==============================================================================
+# PENTESTFLOW REPORTING & EXPORT
+# ==============================================================================
+
+def generate_pdf_from_html(html_content: str) -> bytes:
+    try:
+        from weasyprint import HTML, CSS
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Weasyprint is not installed. Please run: pip install weasyprint")
+
+    # A highly polished, modern CSS stylesheet for the Pentest Reports
+    css = CSS(string="""
+        @page { margin: 2cm; size: A4; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.6; }
+        h1 { color: #0f172a; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; font-size: 28px;}
+        h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-top: 30px;}
+        h3 { color: #334155; margin-top: 25px;}
+        pre { background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; overflow-wrap: break-word; white-space: pre-wrap; font-size: 13px; }
+        code { font-family: 'Courier New', Courier, monospace; background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-size: 13px; color: #db2777; }
+        .finding-box { border: 1px solid #cbd5e1; padding: 20px; margin-bottom: 25px; border-radius: 8px; page-break-inside: avoid; background-color: #ffffff; }
+        .page-break { page-break-before: always; }
+        .status-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+        .status-vuln { background-color: #ef4444; }
+        .status-path { background-color: #22c55e; }
+        .status-rabbit { background-color: #94a3b8; }
+        .status-action { background-color: #0ea5e9; }
+        img { max-width: 100%; height: auto; border-radius: 6px; margin: 15px 0; border: 1px solid #e2e8f0; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 14px;}
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+        th { background-color: #f1f5f9; font-weight: bold;}
+    """)
+    return HTML(string=html_content).write_pdf(stylesheets=[css])
+
+
+def prepare_markdown_for_pdf(md_text: str) -> str:
+    """Translates API image routes into absolute local file paths so Weasyprint can render them."""
+    from services.file_system import VAULT_DIR
+    def repl(match):
+        prefix = match.group(1)
+        rel_path = match.group(2)
+        if prefix == '/api/flow/images/':
+            target = VAULT_DIR / rel_path
+        else:
+            target = VAULT_DIR / "assets" / rel_path.lstrip('/')
+        # Returns an absolute file:// URI for Weasyprint
+        return f"]({target.resolve().as_uri()})"
+
+    return re.sub(r'\]\((/api/flow/images/|/assets/)([^)]+)\)', repl, md_text)
+
+
+@router.get("/flow/report/{engagement_id}")
+def get_engagement_report(engagement_id: str, type: str = "full", user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    try:
+        # Get Root Node
+        cursor = conn.execute("SELECT * FROM flow_nodes WHERE id=?", (engagement_id,))
+        root_node = cursor.fetchone()
+        if not root_node:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+
+        # Get all related Project Nodes
+        cursor = conn.execute("SELECT * FROM flow_nodes")
+        project_nodes = []
+        for r in cursor.fetchall():
+            meta = json.loads(r["meta_tags"]) if r["meta_tags"] else {}
+            if r["id"] == engagement_id or meta.get("engagement_id") == engagement_id:
+                project_nodes.append(dict(r))
+    finally:
+        conn.close()
+
+    # Extract the markdown content directly from actual files in the Vault
+    for n in project_nodes:
+        try:
+            content = file_system.read_note_content(n["file_path"])
+            if "## Notes & Evidence\n" in content:
+                n["markdown_result"] = content.split("## Notes & Evidence\n", 1)[-1].strip()
+            else:
+                n["markdown_result"] = ""
+        except Exception:
+            n["markdown_result"] = ""
+
+    # Sort chronologically
+    project_nodes.sort(key=lambda x: x.get("created_at", ""))
+    vulnerabilities = [n for n in project_nodes if n["status"] == 'vulnerability']
+
+    html_parts = []
+    engagement_title = root_node["title"]
+    header_md = f"# Penetration Test Report: {engagement_title}\n"
+    header_md += f"**Date Generated:** {datetime.now().strftime('%Y-%m-%d')}\n\n"
+    header_md += "## Executive Summary\n"
+    header_md += f"- **Total Findings:** {len(vulnerabilities)}\n"
+    if type == "full":
+        header_md += f"- **Total Actions Logged:** {len(project_nodes) - 1}\n"
+
+    html_parts.append(markdown2.markdown(header_md, extras=["tables", "fenced-code-blocks"]))
+
+    if type == "vulns":
+        html_parts.append("<div class='page-break'></div><h2>Confirmed Vulnerabilities</h2>")
+        for v in vulnerabilities:
+            meta = json.loads(v["meta_tags"]) if v["meta_tags"] else {}
+            severity = meta.get("severity", "Unrated").upper()
+
+            v_md = f"### {v['title']} [{severity}]\n\n"
+            if v.get("command"):
+                v_md += f"**Execution / Payload:**\n```bash\n{v['command']}\n```\n\n"
+            if v.get("markdown_result"):
+                v_md += f"**Evidence:**\n{prepare_markdown_for_pdf(v['markdown_result'])}\n"
+
+            v_html = markdown2.markdown(v_md, extras=["tables", "fenced-code-blocks"])
+            html_parts.append(f"<div class='finding-box'>{v_html}</div>")
+    else:
+        html_parts.append("<div class='page-break'></div><h2>Chronological Engagement Log</h2>")
+        for node in project_nodes:
+            if node["id"] == engagement_id:
+                continue
+
+            status = node.get("status")
+            if status == "vulnerability":
+                status_class = "status-vuln"
+            elif status == "path":
+                status_class = "status-path"
+            elif status == "rabbit_hole":
+                status_class = "status-rabbit"
+            else:
+                status_class = "status-action"
+
+            status_dot_html = f"<span class='status-dot {status_class}'></span>"
+            n_md = f"### {status_dot_html} {node['title']}\n"
+            # Extract clean date from timestamp
+            clean_date = node.get('created_at', '')[:19]
+            n_md += f"*Logged at: {clean_date}*\n\n"
+
+            if node.get("command"):
+                n_md += f"**Command:**\n```bash\n{node['command']}\n```\n\n"
+            if node.get("markdown_result"):
+                n_md += f"{prepare_markdown_for_pdf(node['markdown_result'])}\n"
+
+            n_html = markdown2.markdown(n_md, extras=["tables", "fenced-code-blocks"])
+            html_parts.append(f"<div class='finding-box'>{n_html}</div>")
+
+    final_html_body = "".join(html_parts)
+    pdf_bytes = generate_pdf_from_html(final_html_body)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Report_{type}_{engagement_id}.pdf"}
+    )
+
+
+@router.get("/flow/report/node/{node_id}")
+def get_single_node_report(node_id: str, user: str = Depends(verify_access)):
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute("SELECT * FROM flow_nodes WHERE id=?", (node_id,))
+        node = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    node = dict(node)
+
+    # Read the markdown from the physical file
+    try:
+        content = file_system.read_note_content(node["file_path"])
+        if "## Notes & Evidence\n" in content:
+            node["markdown_result"] = content.split("## Notes & Evidence\n", 1)[-1].strip()
+        else:
+            node["markdown_result"] = ""
+    except Exception:
+        node["markdown_result"] = ""
+
+    meta_tags = json.loads(node["meta_tags"]) if node["meta_tags"] else {}
+
+    md_lines = [f"# Finding Export: {node['title']}\n"]
+    md_lines.append(f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+    if meta_tags.get("severity"):
+        md_lines.append(f"**Severity:** {meta_tags.get('severity').upper()}\n\n")
+
+    if node.get("command"):
+        md_lines.append(f"## Command / Execution\n```bash\n{node['command']}\n```\n")
+
+    if node.get("markdown_result"):
+        md_lines.append(f"## Evidence & Notes\n{prepare_markdown_for_pdf(node['markdown_result'])}\n")
+
+    raw_html = markdown2.markdown("\n".join(md_lines), extras=["tables", "fenced-code-blocks"])
+    pdf_bytes = generate_pdf_from_html(raw_html)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=NodeExport_{node_id}.pdf"}
+    )
