@@ -53,7 +53,7 @@ const MermaidDiagram = ({ chart, theme }) => {
   return <div ref={ref} className="my-6 flex justify-center" />;
 };
 
-// --- NEW: ENHANCED CODE BLOCK WITH COPY ---
+// --- ENHANCED CODE BLOCK WITH COPY ---
 const CodeBlock = ({ children, className, theme }) => {
   const [copied, setCopied] = useState(false);
   const codeContent = String(children).replace(/\n$/, '');
@@ -165,18 +165,28 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
             const match = /language-(\w+)/.exec(className || '');
             const isMermaid = match && match[1] === 'mermaid';
 
-            // Render Mermaid diagrams as before
-            if (!inline && isMermaid) {
+            // ReactMarkdown v9+ omits the `inline` prop.
+            // We reliably detect a block if it specifies a language class OR contains newlines.
+            const isBlock = inline === false || (inline === undefined && (match || String(children).includes('\n')));
+
+            if (isBlock && isMermaid) {
               return <MermaidDiagram chart={String(children).replace(/\n$/, '')} theme={theme} />;
             }
 
-            // If it's a standard code block (not inline), use the new CodeBlock with copy button
-            if (!inline) {
+            if (isBlock) {
               return <CodeBlock children={children} className={className} theme={theme} />;
             }
 
-            // Standard inline code
-            return <code className={className} {...props}>{children}</code>;
+            // Standard inline code: Looks beautiful, no copy button, no block formatting.
+            // before:content-none after:content-none disables the annoying default backticks added by Tailwind prose.
+            return (
+              <code
+                className="bg-slate-100 dark:bg-gray-800/80 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-[0.9em] before:content-none after:content-none"
+                {...props}
+              >
+                {children}
+              </code>
+            );
           }
         }}
       >
