@@ -197,7 +197,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       theme={theme === 'dark' ? vscodeDark : 'light'}
       extensions={editorExtensions}
       onChange={onChange}
-      className="text-lg powder-editor pb-20 transition-colors"
+      className="text-[15px] leading-relaxed powder-editor pb-20 transition-colors"
       basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
     />
   );
