@@ -108,7 +108,7 @@ def sync_search_index(vault_dir: Path):
 
     # Clear the current indexes
     conn.execute("DELETE FROM search_index")
-    conn.execute("DELETE FROM note_tags")  # <--- CLEAR OLD TAGS
+    conn.execute("DELETE FROM note_tags")
 
     # Rebuild from source of truth
     for md_file in vault_dir.rglob("*.md"):
@@ -123,8 +123,10 @@ def sync_search_index(vault_dir: Path):
             )
 
             # 2. Rebuild Tags
+            no_blocks = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+            no_inline = re.sub(r'`.*?`', '', no_blocks)
             # Extract unique tags, convert to lowercase to prevent duplicates
-            tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
+            tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', no_inline))
             for tag in tags:
                 conn.execute(
                     "INSERT OR IGNORE INTO note_tags (path, tag) VALUES (?, ?)",

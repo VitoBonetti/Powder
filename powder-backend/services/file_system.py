@@ -62,7 +62,7 @@ def save_note_content(file_path: str, content: str) -> str:
     target_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        # ATOMIC WRITE: Acquire lock before touching the file
+        # Acquire lock before touching the file
         with _get_lock(target_file):
             target_file.write_text(content, encoding="utf-8")
     except Timeout:
@@ -74,10 +74,11 @@ def save_note_content(file_path: str, content: str) -> str:
     # 1. Update Search Index
     conn.execute("DELETE FROM search_index WHERE path = ?", (file_path,))
     conn.execute("INSERT INTO search_index (path, content) VALUES (?, ?)", (file_path, content))
-
-    # 2. Update Tags Index
+    # Strip code blocks before extracting tags in real-time ---
     conn.execute("DELETE FROM note_tags WHERE path = ?", (file_path,))
-    tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
+    no_blocks = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+    no_inline = re.sub(r'`.*?`', '', no_blocks)
+    tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', no_inline))
     for tag in tags:
         conn.execute("INSERT INTO note_tags (path, tag) VALUES (?, ?)", (file_path, tag.lower()))
 
@@ -562,11 +563,15 @@ def build_knowledge_graph() -> dict:
     nodes = []
     links = []
     node_ids = set()
+    real_nodes = set()
 
     try:
         cursor = conn.execute("SELECT path, content FROM search_index")
         rows = cursor.fetchall()
 
+        # ==========================================
+        # PASS 1: Register all REAL markdown files
+        # ==========================================
         for row in rows:
             path = row["path"]
 
@@ -576,12 +581,19 @@ def build_knowledge_graph() -> dict:
             if path.startswith("_Flows/") or "/_Flows/" in path:
                 continue
 
-
             name = path.split("/")[-1].replace(".md", "")
 
-            if path not in node_ids:
-                nodes.append({"id": path, "name": name, "group": "note"})
-                node_ids.add(path)
+            nodes.append({"id": path, "name": name, "group": "note"})
+            node_ids.add(path)
+            real_nodes.add(path)  # Remember that this is a real file
+
+        # ==========================================
+        # PASS 2: Build Links & Identify true Ghosts
+        # ==========================================
+        for row in rows:
+            path = row["path"]
+            if path not in real_nodes:
+                continue
 
             content = row["content"]
 
@@ -601,7 +613,10 @@ def build_knowledge_graph() -> dict:
                 links.append({"source": path, "target": target_path})
 
             # Extract Tags #tag
-            tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', content))
+            no_blocks = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+            no_inline = re.sub(r'`.*?`', '', no_blocks)
+            tags = set(re.findall(r'(?<![\w])#([a-zA-Z0-9_-]+)', no_inline))
+
             for tag in tags:
                 tag_id = f"#{tag.lower()}"
                 if tag_id not in node_ids:
