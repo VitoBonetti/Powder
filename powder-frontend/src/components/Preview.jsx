@@ -66,19 +66,20 @@ const CodeBlock = ({ children, className, theme }) => {
   };
 
   return (
-    <div className="relative group my-6">
+    <div className="relative group my-4">
       <button
         onClick={handleCopy}
-        className={`absolute right-2 top-2 p-2 rounded-md border transition-all opacity-0 group-hover:opacity-100 z-10 ${
+        className={`absolute right-2 top-2 p-1.5 rounded-md border transition-all opacity-0 group-hover:opacity-100 z-10 ${
           theme === 'dark' 
           ? 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white' 
           : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900 shadow-sm'
         }`}
         title="Copy code"
       >
-        {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
       </button>
-      <pre className="m-0 overflow-x-auto">
+      {/* FIX: Force smaller padding and tighter line height on the pre container */}
+      <pre className="m-0 px-4 py-3 text-[13px] leading-snug overflow-x-auto rounded-lg">
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -87,7 +88,10 @@ const CodeBlock = ({ children, className, theme }) => {
 
 export default function Preview({ content, onLinkClick, onTagClick, theme = 'dark' }) {
   return (
-    <div className="prose dark:prose-invert prose-lg max-w-none pb-20 transition-colors">
+    // FIX: Removed prose-lg for smaller base text.
+    // Added prose-p modifiers for tighter line spacing.
+    // Added prose-h5 modifiers to style H5 elements.
+    <div className="prose dark:prose-invert max-w-none pb-20 transition-colors prose-p:leading-normal prose-p:my-3 prose-h5:text-lg prose-h5:font-semibold prose-h5:mt-6 prose-h5:mb-2 prose-h5:text-slate-800 dark:prose-h5:text-gray-200 prose-ul:my-2 prose-li:my-0.5 text-[15px]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkObsidianCallouts]}
         components={{
@@ -117,12 +121,12 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               else if (['references'].includes(type)) { Icon = BookmarkCheck; colors = "border-teal-400 text-teal-700 bg-teal-50 dark:border-teal-500 dark:text-teal-400 dark:bg-teal-900/10"; }
 
               return (
-                <div className={`my-6 border-l-4 rounded-r-lg px-4 py-3 ${colors} transition-colors`}>
-                  <div className="flex items-center gap-2 font-bold mb-2">
-                    <Icon className="w-5 h-5" />
+                <div className={`my-5 border-l-4 rounded-r-lg px-4 py-3 ${colors} transition-colors`}>
+                  <div className="flex items-center gap-2 font-bold mb-1.5 text-sm">
+                    <Icon className="w-4 h-4" />
                     <span>{title}</span>
                   </div>
-                  <div className="text-slate-700 dark:text-gray-300 prose-p:my-1 prose-p:leading-relaxed transition-colors">
+                  <div className="text-slate-700 dark:text-gray-300 prose-p:my-1 prose-p:leading-normal transition-colors text-sm">
                     {children}
                   </div>
                 </div>
@@ -165,7 +169,7 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               return (
                 <span
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(`#${targetTag}`); }}
-                  className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors"
+                  className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors text-sm"
                 >
                   #{targetTag}
                 </span>
@@ -231,7 +235,7 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
 
             return (
               <code
-                className="bg-slate-100 dark:bg-gray-800/80 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-[0.9em] before:content-none after:content-none"
+                className="bg-slate-100 dark:bg-gray-800/80 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-[0.85em] before:content-none after:content-none"
                 {...props}
               >
                 {children}
