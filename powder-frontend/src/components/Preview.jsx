@@ -134,16 +134,27 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
             return <blockquote className="border-l-4 border-slate-300 dark:border-gray-600 pl-4 py-1 text-slate-600 dark:text-gray-400 italic bg-slate-50 dark:bg-gray-800/30 rounded-r my-4 transition-colors" {...props}>{children}</blockquote>;
           },
           a({node, href, children, ...props}) {
-            if (href?.startsWith('#wiki/')) {
-              const targetName = decodeURIComponent(href.replace('#wiki/', ''));
+            if (!href) return <a {...props}>{children}</a>;
+
+            // ReactMarkdown encodes spaces to %20. We must decode it first
+            // to prevent double-encoding when we send it to the backend.
+            let decodedHref = href;
+            try {
+              decodedHref = decodeURI(href);
+            } catch (e) {
+              // Fallback if URI is malformed
+            }
+
+            if (decodedHref.startsWith('#wiki/')) {
+              const targetName = decodeURIComponent(decodedHref.replace('#wiki/', ''));
               return (
                 <a href={href} onClick={(e) => { e.preventDefault(); onLinkClick(targetName); }} className="text-purple-600 dark:text-purple-400 font-medium no-underline hover:underline cursor-pointer bg-purple-100 dark:bg-purple-900/20 px-1 rounded transition-colors">
                   {children}
                 </a>
               );
             }
-            if (href?.startsWith('#tag/')) {
-              const targetTag = decodeURIComponent(href.replace('#tag/', ''));
+            if (decodedHref.startsWith('#tag/')) {
+              const targetTag = decodeURIComponent(decodedHref.replace('#tag/', ''));
               return (
                 <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(`#${targetTag}`); }} className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors">
                   #{targetTag}
@@ -151,8 +162,8 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               );
             }
 
-            // Handle local internal Markdown links ---
-            const isExternal = href?.startsWith('http') || href?.startsWith('mailto:');
+            // Check the decoded href for external links
+            const isExternal = decodedHref.startsWith('http') || decodedHref.startsWith('mailto:');
 
             if (!isExternal) {
                return (
@@ -161,18 +172,18 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
                     onClick={async (e) => {
                       e.preventDefault();
                       try {
-                        // Ask the backend to resolve the true path of this link
-                        const res = await fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(href)}`), { credentials: 'include' });
+                        // Ask the backend to resolve the true path of this link using the DECODED text
+                        const res = await fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(decodedHref)}`), { credentials: 'include' });
                         if (res.ok) {
                            const data = await res.json();
+                           // Pass the clean, resolved path to open the note
                            onLinkClick(data.path);
                         } else {
-                           // Fallback to just passing the raw href if resolve fails
-                           onLinkClick(href);
+                           onLinkClick(decodedHref);
                         }
                       } catch (err) {
                         console.error("Link resolution failed", err);
-                        onLinkClick(href);
+                        onLinkClick(decodedHref);
                       }
                     }}
                     className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
