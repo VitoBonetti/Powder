@@ -194,7 +194,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     <CodeMirror
       value={content}
       // Set to 'none' in light mode so CodeMirror stops trying to overwrite our styling!
-      theme={theme === 'dark' ? vscodeDark : 'none'}
+      theme={theme === 'dark' ? vscodeDark : 'light'}
       extensions={editorExtensions}
       onChange={onChange}
       className="text-lg powder-editor pb-20 transition-colors"
