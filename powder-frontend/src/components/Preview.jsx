@@ -136,8 +136,7 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
           a({node, href, children, ...props}) {
             if (!href) return <a {...props}>{children}</a>;
 
-            // ReactMarkdown encodes spaces to %20. We must decode it first
-            // to prevent double-encoding when we send it to the backend.
+            // Ensure we handle URL-encoded spaces from ReactMarkdown cleanly
             let decodedHref = href;
             try {
               decodedHref = decodeURI(href);
@@ -145,16 +144,19 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               // Fallback if URI is malformed
             }
 
-            if (decodedHref.startsWith('#wiki/')) {
-              const targetName = decodeURIComponent(decodedHref.replace('#wiki/', ''));
+            // Custom Scheme for Wiki Links
+            if (decodedHref.startsWith('powder-wiki://')) {
+              const targetName = decodeURIComponent(decodedHref.replace('powder-wiki://', ''));
               return (
                 <a href={href} onClick={(e) => { e.preventDefault(); onLinkClick(targetName); }} className="text-purple-600 dark:text-purple-400 font-medium no-underline hover:underline cursor-pointer bg-purple-100 dark:bg-purple-900/20 px-1 rounded transition-colors">
                   {children}
                 </a>
               );
             }
-            if (decodedHref.startsWith('#tag/')) {
-              const targetTag = decodeURIComponent(decodedHref.replace('#tag/', ''));
+
+            //  Custom Scheme for Tags
+            if (decodedHref.startsWith('powder-tag://')) {
+              const targetTag = decodeURIComponent(decodedHref.replace('powder-tag://', ''));
               return (
                 <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(`#${targetTag}`); }} className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors">
                   #{targetTag}
@@ -162,7 +164,7 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               );
             }
 
-            // Check the decoded href for external links
+            // Handle standard internal/local files
             const isExternal = decodedHref.startsWith('http') || decodedHref.startsWith('mailto:');
 
             if (!isExternal) {
@@ -172,11 +174,9 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
                     onClick={async (e) => {
                       e.preventDefault();
                       try {
-                        // Ask the backend to resolve the true path of this link using the DECODED text
                         const res = await fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(decodedHref)}`), { credentials: 'include' });
                         if (res.ok) {
                            const data = await res.json();
-                           // Pass the clean, resolved path to open the note
                            onLinkClick(data.path);
                         } else {
                            onLinkClick(decodedHref);
@@ -194,7 +194,6 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
                );
             }
 
-            // Fallback for real external web links
             return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 dark:text-blue-400 hover:underline" {...props}>{children}</a>;
           },
           img({node, src, alt, ...props}) {
@@ -232,8 +231,9 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
         }}
       >
         {content
-          .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[[${noteName}]](#wiki/${encodeURIComponent(noteName)})`)
-          .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[#${tag}](#tag/${tag})`)
+          /* Replaced the # collision with explicit powder:// schemes */
+          .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[${noteName}](powder-wiki://${encodeURIComponent(noteName)})`)
+          .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[${match}](powder-tag://${tag})`)
         }
       </ReactMarkdown>
     </div>
