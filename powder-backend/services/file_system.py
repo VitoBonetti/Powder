@@ -200,7 +200,7 @@ def update_links(old_path: str, new_path: str):
 
 
 def move_item(source_path: str, destination_path: str) -> bool:
-    """Moves a file or folder into a new directory and updates links."""
+    """Moves a file or folder into a new directory, updates DB, and updates links."""
     src = VAULT_DIR / source_path
     dst_dir = VAULT_DIR / destination_path
 
@@ -214,7 +214,7 @@ def move_item(source_path: str, destination_path: str) -> bool:
     if str(dst_dir.resolve()).startswith(str(src.resolve())):
         raise ValueError("Cannot move a folder into itself.")
 
-    # --- NEW: Calculate the old and new paths BEFORE we move it ---
+    # Calculate the old and new relative paths BEFORE moving
     old_rel = str(src.relative_to(VAULT_DIR)).replace("\\", "/")
     new_file_path = dst_dir / src.name
     new_rel = str(new_file_path.relative_to(VAULT_DIR)).replace("\\", "/")
@@ -222,7 +222,28 @@ def move_item(source_path: str, destination_path: str) -> bool:
     # Move the file on the hard drive
     shutil.move(str(src), str(dst_dir))
 
-    # --- NEW: Trigger the link updater silently in the background ---
+    # Update the SQLite Database so search and tags don't break! ---
+    conn = get_db()
+    try:
+        # Check if the source was originally a file
+        # (We use Path(str(src)) logic conceptually; but we just moved it, so we check new_file_path)
+        if new_file_path.is_file():
+            conn.execute("UPDATE search_index SET path = ? WHERE path = ?", (new_rel, old_rel))
+            conn.execute("UPDATE note_tags SET path = ? WHERE path = ?", (new_rel, old_rel))
+            conn.execute("UPDATE flow_nodes SET file_path = ? WHERE file_path = ?", (new_rel, old_rel))
+        else:
+            # If it was a folder, update ALL files inside it using string replacement
+            conn.execute("UPDATE search_index SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
+                         (old_rel, new_rel, f"{old_rel}/%"))
+            conn.execute("UPDATE note_tags SET path = REPLACE(path, ?, ?) WHERE path LIKE ?",
+                         (old_rel, new_rel, f"{old_rel}/%"))
+            conn.execute("UPDATE flow_nodes SET file_path = REPLACE(file_path, ?, ?) WHERE file_path LIKE ?",
+                         (old_rel, new_rel, f"{old_rel}/%"))
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Trigger the link updater silently in the background
     update_links(old_rel, new_rel)
 
     return True

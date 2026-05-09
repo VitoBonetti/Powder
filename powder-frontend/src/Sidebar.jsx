@@ -87,10 +87,38 @@ const TreeNode = ({ node, onFileSelect, refreshTree, openModal, renamingPath, se
     e.stopPropagation();
     setIsDragOver(false);
     if (!isFolder) return;
+
     const destPath = isRoot ? "" : node.path;
     const sourcePath = e.dataTransfer.getData('sourcePath');
-    if (sourcePath) { return; }
 
+    // --- FIX: Handle Internal File/Folder Moving ---
+    if (sourcePath) {
+      // Prevent moving a folder into itself or its own subfolders
+      if (sourcePath === destPath || destPath.startsWith(sourcePath + '/')) {
+        return;
+      }
+
+      try {
+        const res = await fetch(getApiUrl('/move'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ source: sourcePath, destination: destPath })
+        });
+
+        if (res.ok) {
+          refreshTree();
+        } else {
+          const errData = await res.json();
+          console.error("Failed to move item:", errData.detail);
+        }
+      } catch (err) {
+        console.error("Error moving item:", err);
+      }
+      return;
+    }
+
+    // --- Original External Upload Logic ---
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       const items = Array.from(e.dataTransfer.items).filter(i => i.kind === 'file');
       if (items.length === 0) return;
