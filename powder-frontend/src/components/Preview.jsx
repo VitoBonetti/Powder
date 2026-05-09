@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import mermaid from 'mermaid';
 import toast from 'react-hot-toast';
-import { BACKEND_URL } from '../config';
+import { BACKEND_URL, getApiUrl } from '../config';
 
 // --- CUSTOM PLUGIN: OBSIDIAN CALLOUTS ---
 function remarkObsidianCallouts() {
@@ -150,6 +150,40 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
                 </span>
               );
             }
+
+            // Handle local internal Markdown links ---
+            const isExternal = href?.startsWith('http') || href?.startsWith('mailto:');
+
+            if (!isExternal) {
+               return (
+                  <a
+                    href={href}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        // Ask the backend to resolve the true path of this link
+                        const res = await fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(href)}`), { credentials: 'include' });
+                        if (res.ok) {
+                           const data = await res.json();
+                           onLinkClick(data.path);
+                        } else {
+                           // Fallback to just passing the raw href if resolve fails
+                           onLinkClick(href);
+                        }
+                      } catch (err) {
+                        console.error("Link resolution failed", err);
+                        onLinkClick(href);
+                      }
+                    }}
+                    className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    {...props}
+                  >
+                    {children}
+                  </a>
+               );
+            }
+
+            // Fallback for real external web links
             return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 dark:text-blue-400 hover:underline" {...props}>{children}</a>;
           },
           img({node, src, alt, ...props}) {
@@ -165,8 +199,6 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
             const match = /language-(\w+)/.exec(className || '');
             const isMermaid = match && match[1] === 'mermaid';
 
-            // ReactMarkdown v9+ omits the `inline` prop.
-            // We reliably detect a block if it specifies a language class OR contains newlines.
             const isBlock = inline === false || (inline === undefined && (match || String(children).includes('\n')));
 
             if (isBlock && isMermaid) {
@@ -177,8 +209,6 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
               return <CodeBlock children={children} className={className} theme={theme} />;
             }
 
-            // Standard inline code: Looks beautiful, no copy button, no block formatting.
-            // before:content-none after:content-none disables the annoying default backticks added by Tailwind prose.
             return (
               <code
                 className="bg-slate-100 dark:bg-gray-800/80 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-[0.9em] before:content-none after:content-none"
