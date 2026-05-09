@@ -134,45 +134,55 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
             return <blockquote className="border-l-4 border-slate-300 dark:border-gray-600 pl-4 py-1 text-slate-600 dark:text-gray-400 italic bg-slate-50 dark:bg-gray-800/30 rounded-r my-4 transition-colors" {...props}>{children}</blockquote>;
           },
           a({node, href, children, ...props}) {
+            // If ReactMarkdown stripped the href (which shouldn't happen now), fail gracefully
             if (!href) return <a {...props}>{children}</a>;
 
-            // Ensure we handle URL-encoded spaces from ReactMarkdown cleanly
             let decodedHref = href;
             try {
               decodedHref = decodeURI(href);
             } catch (e) {
-              // Fallback if URI is malformed
+              // Fallback if URI is somehow malformed
             }
 
-            // Custom Scheme for Wiki Links
-            if (decodedHref.startsWith('powder-wiki://')) {
-              const targetName = decodeURIComponent(decodedHref.replace('powder-wiki://', ''));
+            // 1. Handle Wiki Links via safe relative query paths
+            if (decodedHref.startsWith('./?powder_wiki=')) {
+              const targetName = decodeURIComponent(decodedHref.replace('./?powder_wiki=', ''));
               return (
-                <a href={href} onClick={(e) => { e.preventDefault(); onLinkClick(targetName); }} className="text-purple-600 dark:text-purple-400 font-medium no-underline hover:underline cursor-pointer bg-purple-100 dark:bg-purple-900/20 px-1 rounded transition-colors">
+                <a
+                  {...props}
+                  href={href}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLinkClick(targetName); }}
+                  className="text-purple-600 dark:text-purple-400 font-medium no-underline hover:underline cursor-pointer bg-purple-100 dark:bg-purple-900/20 px-1 rounded transition-colors"
+                >
                   {children}
                 </a>
               );
             }
 
-            //  Custom Scheme for Tags
-            if (decodedHref.startsWith('powder-tag://')) {
-              const targetTag = decodeURIComponent(decodedHref.replace('powder-tag://', ''));
+            // 2. Handle Tags
+            if (decodedHref.startsWith('./?powder_tag=')) {
+              const targetTag = decodeURIComponent(decodedHref.replace('./?powder_tag=', ''));
               return (
-                <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(`#${targetTag}`); }} className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors">
+                <span
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagClick(`#${targetTag}`); }}
+                  className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/40 hover:underline transition-colors"
+                >
                   #{targetTag}
                 </span>
               );
             }
 
-            // Handle standard internal/local files
-            const isExternal = decodedHref.startsWith('http') || decodedHref.startsWith('mailto:');
+            // 3. Handle standard internal/local files
+            const isExternal = decodedHref.startsWith('http') || decodedHref.startsWith('mailto:') || decodedHref.startsWith('tel:');
 
             if (!isExternal) {
                return (
                   <a
+                    {...props}
                     href={href}
                     onClick={async (e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       try {
                         const res = await fetch(getApiUrl(`/resolve-link?target=${encodeURIComponent(decodedHref)}`), { credentials: 'include' });
                         if (res.ok) {
@@ -187,14 +197,14 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
                       }
                     }}
                     className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    {...props}
                   >
                     {children}
                   </a>
                );
             }
 
-            return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 dark:text-blue-400 hover:underline" {...props}>{children}</a>;
+            // 4. Fallback for real external web links
+            return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 dark:text-blue-400 hover:underline">{children}</a>;
           },
           img({node, src, alt, ...props}) {
             let fullSrc = src;
@@ -231,9 +241,9 @@ export default function Preview({ content, onLinkClick, onTagClick, theme = 'dar
         }}
       >
         {content
-          /* Replaced the # collision with explicit powder:// schemes */
-          .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[${noteName}](powder-wiki://${encodeURIComponent(noteName)})`)
-          .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[${match}](powder-tag://${tag})`)
+          // Using safe relative paths bypassing ReactMarkdown's security sanitizer
+          .replace(/\[\[(.*?)\]\]/g, (match, noteName) => `[${noteName}](./?powder_wiki=${encodeURIComponent(noteName)})`)
+          .replace(/(?<![\w])#([a-zA-Z0-9_-]+)/g, (match, tag) => `[${match}](./?powder_tag=${tag})`)
         }
       </ReactMarkdown>
     </div>
