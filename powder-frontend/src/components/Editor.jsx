@@ -63,7 +63,7 @@ const editorThemeLight = EditorView.theme({
   ".cm-line": { color: "#334155" },
   ".cm-activeLine": { backgroundColor: "rgba(0, 0, 0, 0.04)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: "rgba(14, 165, 233, 0.25) !important" },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#0ea5e9" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#0ea5e9 !important", borderLeftWidth: "2px !important"},
 }, { dark: false });
 
 
