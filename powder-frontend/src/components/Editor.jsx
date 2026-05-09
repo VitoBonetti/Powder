@@ -15,6 +15,7 @@ const customMarkdownStyleDark = HighlightStyle.define([
   { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#93c5fd" },
   { tag: t.heading3, fontSize: "1.5em", fontWeight: "bold", color: "#e2e8f0" },
   { tag: t.heading4, fontSize: "1.2em", fontWeight: "bold", color: "#e2e8f0" },
+  { tag: t.heading5, fontSize: "1.0em", fontWeight: "bold", color: "#e2e8f0" },
   { tag: t.strong, fontWeight: "bold", color: "#ffffff" },
   { tag: t.emphasis, fontStyle: "italic", color: "#cbd5e1" },
   { tag: t.strikethrough, textDecoration: "line-through" },
