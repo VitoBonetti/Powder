@@ -73,7 +73,10 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
 
   const uploadImage = (file, view, pos) => {
     const placeholder = `\n![Uploading ${file.name}...]()\n`;
+
+    // 1. Insert the "Uploading..." placeholder
     view.dispatch({ changes: { from: pos, insert: placeholder } });
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -82,18 +85,40 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       body: formData,
       credentials: 'include'
     })
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) throw new Error("Server rejected the image");
+      return res.json();
+    })
     .then(data => {
+      // 2. Find where the placeholder is NOW (in case the user kept typing)
+      const currentDoc = view.state.doc.toString();
+      const placeholderIndex = currentDoc.indexOf(placeholder);
+
+      if (placeholderIndex !== -1) {
+        // 3. FIX: Properly format the CodeMirror 6 transaction inside the 'changes' object
+        view.dispatch({
+          changes: {
+            from: placeholderIndex,
+            to: placeholderIndex + placeholder.length,
+            insert: `\n![${file.name}](${data.path})\n`
+          }
+        });
+      }
+    }).catch(err => {
+      console.error("Image upload failed:", err);
+      // Optional: Clean up the placeholder if the upload fails
       const currentDoc = view.state.doc.toString();
       const placeholderIndex = currentDoc.indexOf(placeholder);
       if (placeholderIndex !== -1) {
         view.dispatch({
-          from: placeholderIndex,
-          to: placeholderIndex + placeholder.length,
-          insert: `\n![${file.name}](${data.path})\n`
+          changes: {
+            from: placeholderIndex,
+            to: placeholderIndex + placeholder.length,
+            insert: `\n![Failed to upload: ${file.name}]()\n`
+          }
         });
       }
-    }).catch(err => console.error("Image upload failed:", err));
+    });
   };
 
   const editorExtensions = useMemo(() => {
