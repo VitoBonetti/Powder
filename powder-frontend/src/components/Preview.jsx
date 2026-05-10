@@ -42,15 +42,28 @@ function remarkObsidianCallouts() {
 const MermaidDiagram = ({ chart, theme }) => {
   const ref = useRef(null);
   useEffect(() => {
-    mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default' });
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: theme === 'dark' ? 'dark' : 'neutral',
+      fontFamily: 'inherit'
+    });
+
     if (ref.current && chart) {
       const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
       mermaid.render(id, chart).then(({ svg }) => {
-        if (ref.current) ref.current.innerHTML = svg;
+        if (ref.current) {
+          ref.current.innerHTML = svg;
+          // FIX: Force the rendered SVG to be responsive so it doesn't get cut off
+          const svgElement = ref.current.querySelector('svg');
+          if (svgElement) {
+            svgElement.style.maxWidth = '100%';
+            svgElement.style.height = 'auto';
+          }
+        }
       }).catch(err => console.error("Mermaid error:", err));
     }
   }, [chart, theme]);
-  return <div ref={ref} className="my-6 flex justify-center" />;
+  return <div ref={ref} className="my-6 flex justify-center overflow-x-auto w-full" />;
 };
 
 // --- ENHANCED CODE BLOCK WITH COPY ---
