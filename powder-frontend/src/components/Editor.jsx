@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -38,7 +38,7 @@ const editorThemeDark = EditorView.theme({
 }, { dark: true });
 
 
-// --- LIGHT MODE HIGHLIGHTING (The Fix!) ---
+// --- LIGHT MODE HIGHLIGHTING ---
 const customMarkdownStyleLight = HighlightStyle.define([
   { tag: t.heading1, fontSize: "2.5em", fontWeight: "bold", color: "#0284c7" },
   { tag: t.heading2, fontSize: "2em", fontWeight: "bold", color: "#0369a1" },
@@ -52,7 +52,7 @@ const customMarkdownStyleLight = HighlightStyle.define([
   { tag: t.meta, color: "#94a3b8" },      // Markdown symbols (###, >, ```)
   { tag: t.link, color: "#2563eb", textDecoration: "underline" },
   { tag: t.url, color: "#94a3b8" },
-  { tag: t.content, color: "#334155" },   // Normal Text (Force dark slate)
+  { tag: t.content, color: "#334155" },   // Normal Text
   { tag: t.keyword, color: "#d946ef" },
   { tag: t.string, color: "#16a34a" },
 ]);
@@ -68,12 +68,15 @@ const editorThemeLight = EditorView.theme({
 
 
 export default function Editor({ content, onChange, onLinkClick, onTagClick, onOpenTemplate, theme = 'dark' }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const viewRef = useRef(null); // Keep a reference to the active CodeMirror view
 
   const uploadImage = (file, view, pos) => {
     const placeholder = `\n![Uploading ${file.name}...]()\n`;
     view.dispatch({ changes: { from: pos, insert: placeholder } });
     const formData = new FormData();
     formData.append('file', file);
+
     fetch(getApiUrl('/upload-asset'), {
       method: 'POST',
       body: formData,
@@ -84,7 +87,11 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
       const currentDoc = view.state.doc.toString();
       const placeholderIndex = currentDoc.indexOf(placeholder);
       if (placeholderIndex !== -1) {
-        view.dispatch({ from: placeholderIndex, to: placeholderIndex + placeholder.length, insert: `\n![${file.name}](${data.path})\n` });
+        view.dispatch({
+          from: placeholderIndex,
+          to: placeholderIndex + placeholder.length,
+          insert: `\n![${file.name}](${data.path})\n`
+        });
       }
     }).catch(err => console.error("Image upload failed:", err));
   };
@@ -147,10 +154,8 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     };
 
     return [
-      // Force our exact base theme overrides depending on the mode
       theme === 'dark' ? editorThemeDark : editorThemeLight,
       markdown({ base: markdownLanguage, codeLanguages: languages }),
-      // Inject the exact syntax colors
       syntaxHighlighting(theme === 'dark' ? customMarkdownStyleDark : customMarkdownStyleLight),
       wikiLinkPlugin,
       tagPlugin,
@@ -168,37 +173,88 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         paste(event, view) {
           const items = event.clipboardData?.items;
           for (const item of items || []) {
-            if (item.type.startsWith("image/")) { event.preventDefault(); uploadImage(item.getAsFile(), view, view.state.selection.main.head); return true; }
-          }
-          return false;
-        },
-        drop(event, view) {
-          const items = event.dataTransfer?.files;
-          if (items && items.length > 0) {
-            for (const file of items) {
-              if (file.type.startsWith("image/")) {
-                event.preventDefault();
-                const pos = view.posAtCoords({x: event.clientX, y: event.clientY});
-                uploadImage(file, view, pos ? pos : view.state.selection.main.head);
-                return true;
-              }
+            if (item.type.startsWith("image/")) {
+              event.preventDefault();
+              uploadImage(item.getAsFile(), view, view.state.selection.main.head);
+              return true;
             }
           }
           return false;
         }
+        // Removed CodeMirror's native drop handler to prevent conflicts with our global container handler
       })
     ];
   }, [onLinkClick, onTagClick, onOpenTemplate, theme]);
 
+  // --- HTML5 Drag and Drop Handlers ---
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only remove the drag UI if we actually leave the container (prevents flickering)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const items = e.dataTransfer?.files;
+    if (items && items.length > 0 && viewRef.current) {
+      for (const file of items) {
+        if (file.type.startsWith("image/")) {
+          const view = viewRef.current;
+
+          // Attempt to figure out exactly where the user dropped the file based on cursor coordinates
+          let pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+
+          // If dropped in the empty space below the text, safely append it to the end of the document
+          if (pos === null) {
+            pos = view.state.doc.length;
+          }
+
+          uploadImage(file, view, pos);
+        }
+      }
+    }
+  };
+
   return (
-    <CodeMirror
-      value={content}
-      // Set to 'none' in light mode so CodeMirror stops trying to overwrite our styling!
-      theme={theme === 'dark' ? vscodeDark : 'light'}
-      extensions={editorExtensions}
-      onChange={onChange}
-      className="text-[15px] leading-relaxed powder-editor pb-20 transition-colors"
-      basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
-    />
+    <div
+      className="h-full relative group"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Visual Overlay shown during drag */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-lg pointer-events-none transition-all duration-200">
+          <div className="bg-white dark:bg-gray-800 px-6 py-3 rounded-lg shadow-xl text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-3">
+            <svg className="w-6 h-6 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Drop image here to insert
+          </div>
+        </div>
+      )}
+
+      <CodeMirror
+        value={content}
+        theme={theme === 'dark' ? vscodeDark : 'light'}
+        extensions={editorExtensions}
+        onChange={onChange}
+        onCreateEditor={(view) => { viewRef.current = view; }} // Save the view reference
+        className="text-[15px] leading-relaxed powder-editor pb-20 transition-colors h-full"
+        basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+      />
+    </div>
   );
 }
