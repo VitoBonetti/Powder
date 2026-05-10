@@ -191,12 +191,15 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
+    // Tell the OS this is a valid drop zone (shows the green '+' icon)
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only remove the drag UI if we actually leave the container (prevents flickering)
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragging(false);
     }
@@ -213,11 +216,11 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         if (file.type.startsWith("image/")) {
           const view = viewRef.current;
 
-          // Attempt to figure out exactly where the user dropped the file based on cursor coordinates
           let pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
 
-          // If dropped in the empty space below the text, safely append it to the end of the document
-          if (pos === null) {
+          // Safety fallback: if they dropped it in the empty space at the bottom,
+          // or if CodeMirror fails to calculate the coordinates, append to the end.
+          if (pos === null || typeof pos !== 'number') {
             pos = view.state.doc.length;
           }
 
@@ -230,9 +233,10 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
   return (
     <div
       className="h-full relative group"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      // FIX: Use Capture phase so CodeMirror can't swallow the events!
+      onDragOverCapture={handleDragOver}
+      onDragLeaveCapture={handleDragLeave}
+      onDropCapture={handleDrop}
     >
       {/* Visual Overlay shown during drag */}
       {isDragging && (
@@ -251,7 +255,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         theme={theme === 'dark' ? vscodeDark : 'light'}
         extensions={editorExtensions}
         onChange={onChange}
-        onCreateEditor={(view) => { viewRef.current = view; }} // Save the view reference
+        onCreateEditor={(view) => { viewRef.current = view; }}
         className="text-[15px] leading-relaxed powder-editor pb-20 transition-colors h-full"
         basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
       />
