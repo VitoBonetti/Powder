@@ -257,7 +257,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
             return handled;
           }
 
-          / 3. Fallback: Handle dragging custom paths from the Sidebar
+          // 3. Fallback: Handle dragging custom paths from the Sidebar
           // CRITICAL FIX: Explicitly look for the Sidebar's custom 'sourcepath' key
           let textData = event.dataTransfer.getData('sourcepath');
 
