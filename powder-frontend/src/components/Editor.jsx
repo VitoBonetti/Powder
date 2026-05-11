@@ -218,6 +218,7 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
           return true;
         },
         drop(event, view) {
+          console.log("Available payload data:", Array.from(event.dataTransfer.types).map(t => `${t} = ${event.dataTransfer.getData(t)}`));
           event.preventDefault();
 
           // 1. Calculate exact drop coordinates first
