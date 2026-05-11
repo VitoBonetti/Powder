@@ -366,7 +366,7 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
             </div>
 
             {/* ADDED theme TO data-color-mode */}
-            div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {(formData.markdown_result?.length || 0) > 150000 ? (
                 <div style={
                   isRawFullscreen
