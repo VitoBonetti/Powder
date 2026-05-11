@@ -14,6 +14,7 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const prevNodeId = useRef(null);
+  const [isRawFullscreen, setIsRawFullscreen] = useState(false);
 
   const apiCall = async (endpoint, method = 'GET', body = null) => {
     const options = {
@@ -365,12 +366,25 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
             </div>
 
             {/* ADDED theme TO data-color-mode */}
-            <div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {(formData.markdown_result?.length || 0) > 150000 ? (
-                <>
-                  <div style={{ backgroundColor: t.dangerBg, color: t.dangerText, padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: `1px solid ${t.dangerBorder}`, borderBottom: 'none', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
-                    Alert: Document is very large ({(formData.markdown_result.length / 1024).toFixed(0)} KB). Syntax highlighting disabled to prevent freezing.
+                <div style={
+                  isRawFullscreen
+                    ? { position: 'fixed', inset: 0, zIndex: 100000, backgroundColor: t.bg, display: 'flex', flexDirection: 'column', padding: '20px' }
+                    : { display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }
+                }>
+                  <div style={{ backgroundColor: t.dangerBg, color: t.dangerText, padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: `1px solid ${t.dangerBorder}`, borderBottom: 'none', borderTopLeftRadius: isRawFullscreen ? '0' : '6px', borderTopRightRadius: isRawFullscreen ? '0' : '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>⚠️ Document is very large ({(formData.markdown_result.length / 1024).toFixed(0)} KB). Syntax highlighting disabled.</span>
+
+                    {/* ENLARGE BUTTON */}
+                    <button
+                      onClick={() => setIsRawFullscreen(!isRawFullscreen)}
+                      style={{ background: t.dangerText, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                    >
+                      {isRawFullscreen ? '✕ Exit Fullscreen' : '⛶ Enlarge'}
+                    </button>
                   </div>
+
                   <textarea
                     value={formData.markdown_result}
                     onChange={(e) => { setFormData(prev => ({ ...prev, markdown_result: e.target.value })); setIsDirty(true); }}
@@ -381,16 +395,17 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
                       backgroundColor: t.panelBg,
                       color: t.text,
                       border: `1px solid ${t.border}`,
-                      borderBottomLeftRadius: '6px',
-                      borderBottomRightRadius: '6px',
+                      borderBottomLeftRadius: isRawFullscreen ? '0' : '6px',
+                      borderBottomRightRadius: isRawFullscreen ? '0' : '6px',
                       resize: 'none',
                       fontFamily: 'monospace',
                       fontSize: '13px',
                       outline: 'none',
-                      whiteSpace: 'pre-wrap'
+                      whiteSpace: 'pre-wrap',
+                      boxShadow: isRawFullscreen ? '0 10px 30px rgba(0,0,0,0.5)' : 'none'
                     }}
                   />
-                </>
+                </div>
               ) : (
                 <MDEditor
                   value={formData.markdown_result}
