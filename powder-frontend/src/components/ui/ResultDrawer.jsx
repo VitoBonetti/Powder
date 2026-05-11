@@ -365,8 +365,41 @@ export default function ResultDrawer({ selectedNode, onClose, onUpdateNode, onDe
             </div>
 
             {/* ADDED theme TO data-color-mode */}
-            <div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden' }}>
-              <MDEditor value={formData.markdown_result} onChange={(val) => { setFormData(prev => ({ ...prev, markdown_result: val || '' })); setIsDirty(true); }} height="100%" preview="edit" style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, boxShadow: 'none' }} />
+            <div data-color-mode={theme} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {(formData.markdown_result?.length || 0) > 150000 ? (
+                <>
+                  <div style={{ backgroundColor: t.dangerBg, color: t.dangerText, padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: `1px solid ${t.dangerBorder}`, borderBottom: 'none', borderTopLeftRadius: '6px', borderTopRightRadius: '6px' }}>
+                    Alert: Document is very large ({(formData.markdown_result.length / 1024).toFixed(0)} KB). Syntax highlighting disabled to prevent freezing.
+                  </div>
+                  <textarea
+                    value={formData.markdown_result}
+                    onChange={(e) => { setFormData(prev => ({ ...prev, markdown_result: e.target.value })); setIsDirty(true); }}
+                    style={{
+                      flex: 1,
+                      width: '100%',
+                      padding: '16px',
+                      backgroundColor: t.panelBg,
+                      color: t.text,
+                      border: `1px solid ${t.border}`,
+                      borderBottomLeftRadius: '6px',
+                      borderBottomRightRadius: '6px',
+                      resize: 'none',
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      outline: 'none',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  />
+                </>
+              ) : (
+                <MDEditor
+                  value={formData.markdown_result}
+                  onChange={(val) => { setFormData(prev => ({ ...prev, markdown_result: val || '' })); setIsDirty(true); }}
+                  height="100%"
+                  preview="edit"
+                  style={{ backgroundColor: t.panelBg, border: `1px solid ${t.border}`, boxShadow: 'none' }}
+                />
+              )}
             </div>
           </div>
         </div>
