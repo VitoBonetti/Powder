@@ -207,66 +207,57 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
           return false;
         },
         // --- NATIVE DRAG & DROP ---
+        dragenter(event) {
+          // CRITICAL: Required by browsers to authorize file payloads
+          event.preventDefault();
+          return true;
+        },
         dragover(event) {
-          // CRITICAL: Tells the browser this specific text area accepts drops
           event.preventDefault();
           return true;
         },
         drop(event, view) {
-          console.log("=== DRAG AND DROP DEBUG START ===");
-          console.log("1. Drop event fired inside CodeMirror!");
-
           event.preventDefault();
 
           let filesToProcess = [];
 
-          // Log exactly what the browser sees in the data payload
-          console.log("2. Raw dataTransfer files:", event.dataTransfer?.files);
-          console.log("3. Raw dataTransfer items:", event.dataTransfer?.items);
-
-          if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-            filesToProcess = Array.from(event.dataTransfer.files);
-            console.log("4. Extracted via .files:", filesToProcess);
-          } else if (event.dataTransfer?.items) {
-            filesToProcess = Array.from(event.dataTransfer.items)
-              .filter(item => item.kind === 'file')
-              .map(item => item.getAsFile());
-            console.log("4. Extracted via .items:", filesToProcess);
+          // Bulletproof extraction using standard for-loops
+          if (event.dataTransfer?.items) {
+            for (let i = 0; i < event.dataTransfer.items.length; i++) {
+              const item = event.dataTransfer.items[i];
+              // Ensure it is a physical file, not a URL string
+              if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) filesToProcess.push(file);
+              }
+            }
+          } else if (event.dataTransfer?.files) {
+            for (let i = 0; i < event.dataTransfer.files.length; i++) {
+              filesToProcess.push(event.dataTransfer.files[i]);
+            }
           }
 
           if (filesToProcess.length === 0) {
-            console.error("FAIL: No files detected in the drop event. The browser is withholding the file data.");
+            console.warn("No physical files detected. If dragging from another browser tab, save it to your computer first.");
             return false;
           }
 
           let handled = false;
           filesToProcess.forEach(file => {
-            console.log(`5. Processing file: name="${file?.name}", type="${file?.type}"`);
-
             if (file && file.type.startsWith("image/")) {
-
-              // Log the coordinate calculation
-              console.log(`6. Mouse coordinates: X=${event.clientX}, Y=${event.clientY}`);
+              // Calculate exact drop coordinates
               let posInfo = view.posAtCoords({ x: event.clientX, y: event.clientY });
-              console.log("7. CodeMirror posInfo:", posInfo);
-
               let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
-              console.log(`8. Final injection index calculated: ${pos}`);
 
-              console.log("9. Executing uploadImage function...");
-              try {
-                uploadImage(file, view, pos);
-                console.log("10. uploadImage executed without immediately crashing.");
-              } catch (e) {
-                console.error("FAIL: uploadImage function threw an error:", e);
-              }
+              // Failsafe bounds check
+              const maxPos = view.state.doc.length;
+              if (pos > maxPos) pos = maxPos;
+              if (pos < 0) pos = 0;
+
+              uploadImage(file, view, pos);
               handled = true;
-            } else {
-              console.warn(`SKIP: File is not an image (type: ${file?.type})`);
             }
           });
-
-          console.log("=== DRAG AND DROP DEBUG END ===");
           return handled;
         }
       })
