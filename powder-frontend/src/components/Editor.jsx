@@ -208,26 +208,33 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
         },
         // --- NATIVE DRAG & DROP ---
         dragenter(event) {
-          // CRITICAL: Required by browsers to authorize file payloads
+          // Required by the browser to authorize the drop zone
           event.preventDefault();
           return true;
         },
         dragover(event) {
+          // Required by the browser to authorize the drop zone
           event.preventDefault();
           return true;
         },
         drop(event, view) {
           event.preventDefault();
 
-          let filesToProcess = [];
+          // 1. Calculate exact drop coordinates first
+          let posInfo = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
 
-          // Bulletproof extraction using standard for-loops
+          // Failsafe bounds check
+          const maxPos = view.state.doc.length;
+          if (pos > maxPos) pos = maxPos;
+          if (pos < 0) pos = 0;
+
+          // 2. Try to extract PHYSICAL files
+          let filesToProcess = [];
           if (event.dataTransfer?.items) {
             for (let i = 0; i < event.dataTransfer.items.length; i++) {
-              const item = event.dataTransfer.items[i];
-              // Ensure it is a physical file, not a URL string
-              if (item.kind === 'file') {
-                const file = item.getAsFile();
+              if (event.dataTransfer.items[i].kind === 'file') {
+                const file = event.dataTransfer.items[i].getAsFile();
                 if (file) filesToProcess.push(file);
               }
             }
@@ -237,28 +244,44 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
             }
           }
 
-          if (filesToProcess.length === 0) {
-            console.warn("No physical files detected. If dragging from another browser tab, save it to your computer first.");
-            return false;
+          if (filesToProcess.length > 0) {
+            // Handle physical file upload
+            let handled = false;
+            filesToProcess.forEach(file => {
+              if (file && file.type.startsWith("image/")) {
+                uploadImage(file, view, pos);
+                handled = true;
+              }
+            });
+            return handled;
           }
 
-          let handled = false;
-          filesToProcess.forEach(file => {
-            if (file && file.type.startsWith("image/")) {
-              // Calculate exact drop coordinates
-              let posInfo = view.posAtCoords({ x: event.clientX, y: event.clientY });
-              let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
+          // 3. Fallback: Handle dragging paths/locations from the sidebar (Text Data)
+          const textData = event.dataTransfer.getData('text/plain') || event.dataTransfer.getData('text/uri-list');
 
-              // Failsafe bounds check
-              const maxPos = view.state.doc.length;
-              if (pos > maxPos) pos = maxPos;
-              if (pos < 0) pos = 0;
+          if (textData) {
+            let insertText = textData;
 
-              uploadImage(file, view, pos);
-              handled = true;
+            // Format as an image if it looks like an image path
+            if (insertText.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
+              const filename = insertText.split('/').pop();
+              insertText = `\n![${filename}](${insertText})\n`;
             }
-          });
-          return handled;
+            // Format as a wiki link if it's a markdown note
+            else if (insertText.endsWith('.md')) {
+              const filename = insertText.split('/').pop().replace('.md', '');
+              insertText = `[[${filename}]]`;
+            }
+
+            // Insert the formatted string exactly where the mouse dropped it
+            view.dispatch({
+              changes: { from: pos, insert: insertText }
+            });
+
+            return true;
+          }
+
+          return false;
         }
       })
     ];
