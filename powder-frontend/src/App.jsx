@@ -196,7 +196,7 @@ function App() {
               <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} theme={theme} />
 
               {activeFile && !isImageFile && (
-                <div className="absolute bottom-8 left-8 z-20 flex bg-white dark:bg-[#161b22] border border-slate-200 dark:border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-all">
+                <div className="absolute bottom-8 right-8 z-20 flex bg-white dark:bg-[#161b22] border border-slate-200 dark:border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-all">
                   <button onClick={() => setViewMode('edit')} title="Edit Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'edit' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Edit3 className="w-4 h-4" /> </button>
                   <button onClick={() => setViewMode('split')} title="Split Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'split' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Columns className="w-4 h-4" /> </button>
                   <button onClick={() => setViewMode('preview')} title="Preview Mode" className={`p-1.5 rounded transition-colors ${viewMode === 'preview' ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-800'}`}> <Eye className="w-4 h-4" /> </button>
