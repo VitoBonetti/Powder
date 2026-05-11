@@ -139,8 +139,14 @@ function App() {
   }, [activeFile]);
 
   const handleFileRename = useCallback((oldPath, newPath) => {
+    // 1. Update the tab names
     setOpenTabs(prev => prev.map(t => (t === oldPath ? newPath : t)));
+
+    // 2. Update the active file view
     if (activeFile === oldPath) setActiveFile(newPath);
+
+    // 3. Force the Sidebar to immediately fetch the updated tree
+    setSidebarRefresh(Date.now());
   }, [activeFile]);
 
   const openFileInTab = (path) => {
