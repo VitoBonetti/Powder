@@ -257,8 +257,14 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
             return handled;
           }
 
-          // 3. Fallback: Handle dragging paths/locations from the sidebar (Text Data)
-          const textData = event.dataTransfer.getData('text/plain') || event.dataTransfer.getData('text/uri-list');
+          / 3. Fallback: Handle dragging custom paths from the Sidebar
+          // CRITICAL FIX: Explicitly look for the Sidebar's custom 'sourcepath' key
+          let textData = event.dataTransfer.getData('sourcepath');
+
+          // Fallback to standard text just in case you drag from outside the app
+          if (!textData) {
+            textData = event.dataTransfer.getData('text/plain') || event.dataTransfer.getData('text/uri-list');
+          }
 
           if (textData) {
             let insertText = textData;
@@ -266,9 +272,12 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
             // Format as an image if it looks like an image path
             if (insertText.match(/\.(png|jpe?g|gif|webp|svg)$/i)) {
               const filename = insertText.split('/').pop();
+
+              // Depending on your markdown setup, you might need a leading slash.
+              // If your log said 'assets/...', we format it perfectly:
               insertText = `\n![${filename}](${insertText})\n`;
             }
-            // Format as a wiki link if it's a markdown note
+            // Format as a wiki link if you drag a markdown note
             else if (insertText.endsWith('.md')) {
               const filename = insertText.split('/').pop().replace('.md', '');
               insertText = `[[${filename}]]`;
