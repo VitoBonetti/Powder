@@ -205,62 +205,63 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
             }
           }
           return false;
+        },
+        drop(event, view) {
+          const files = event.dataTransfer?.files;
+          if (!files || files.length === 0) return false;
+
+          let handled = false;
+          for (const file of Array.from(files)) {
+            if (file.type.startsWith("image/")) {
+              event.preventDefault();
+
+              // CodeMirror natively gives us the exact text coordinate
+              let posInfo = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
+
+              uploadImage(file, view, pos);
+              handled = true;
+            }
+          }
+          return handled;
         }
-        // Removed CodeMirror's native drop handler to prevent conflicts with our global container handler
       })
     ];
   }, [onLinkClick, onTagClick, onOpenTemplate, theme]);
 
   // --- HTML5 Drag and Drop Handlers ---
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-    // Tell the OS this is a valid drop zone (shows the green '+' icon)
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'copy';
     }
+    setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    e.stopPropagation();
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragging(false);
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDropContainer = (e) => {
+    // Just clear the visual overlay. CodeMirror's native drop handler processes the file!
     setIsDragging(false);
-
-    const items = e.dataTransfer?.files;
-    if (items && items.length > 0 && viewRef.current) {
-      const view = viewRef.current;
-
-      // Safely convert FileList to an Array to ensure cross-browser iteration
-      for (const file of Array.from(items)) {
-        if (file.type.startsWith("image/")) {
-          // 1. Get the position object from CodeMirror
-          let posInfo = view.posAtCoords({ x: e.clientX, y: e.clientY });
-
-          // 2. Extract the actual numeric position or fallback to the document end
-          let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
-
-          uploadImage(file, view, pos);
-        }
-      }
-    }
   };
 
   return (
     <div
       className="h-full relative group"
-      // FIX: Use Capture phase so CodeMirror can't swallow the events!
+      onDragEnter={handleDragEnter}
       onDragOverCapture={handleDragOver}
       onDragLeaveCapture={handleDragLeave}
-      onDropCapture={handleDrop}
+      onDrop={handleDropContainer}
     >
       {/* Visual Overlay shown during drag */}
       {isDragging && (
