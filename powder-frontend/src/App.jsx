@@ -199,7 +199,7 @@ function App() {
              />
           ) : (
             <>
-              <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} theme={theme} />
+              <TabBar tabs={openTabs} activeTab={activeFile} onTabSelect={setActiveFile} onTabClose={closeTab} onTabRename={handleFileRename} theme={theme} />
 
               {activeFile && !isImageFile && (
                 <div className="absolute bottom-8 right-8 z-20 flex bg-white dark:bg-[#161b22] border border-slate-200 dark:border-gray-700 rounded-lg p-1 shadow-2xl opacity-50 hover:opacity-100 transition-all">
