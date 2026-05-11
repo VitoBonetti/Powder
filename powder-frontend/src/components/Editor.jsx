@@ -237,17 +237,16 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
 
     const items = e.dataTransfer?.files;
     if (items && items.length > 0 && viewRef.current) {
-      for (const file of items) {
+      const view = viewRef.current;
+
+      // Safely convert FileList to an Array to ensure cross-browser iteration
+      for (const file of Array.from(items)) {
         if (file.type.startsWith("image/")) {
-          const view = viewRef.current;
+          // 1. Get the position object from CodeMirror
+          let posInfo = view.posAtCoords({ x: e.clientX, y: e.clientY });
 
-          let pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
-
-          // Safety fallback: if they dropped it in the empty space at the bottom,
-          // or if CodeMirror fails to calculate the coordinates, append to the end.
-          if (pos === null || typeof pos !== 'number') {
-            pos = view.state.doc.length;
-          }
+          // 2. Extract the actual numeric position or fallback to the document end
+          let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
 
           uploadImage(file, view, pos);
         }
