@@ -206,23 +206,40 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
           }
           return false;
         },
+        // --- NATIVE DRAG & DROP ---
+        dragover(event) {
+          // CRITICAL: Tells the browser this specific text area accepts drops
+          event.preventDefault();
+          return true;
+        },
         drop(event, view) {
-          const files = event.dataTransfer?.files;
-          if (!files || files.length === 0) return false;
+          event.preventDefault();
+
+          let filesToProcess = [];
+          if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            filesToProcess = Array.from(event.dataTransfer.files);
+          } else if (event.dataTransfer?.items) {
+            filesToProcess = Array.from(event.dataTransfer.items)
+              .filter(item => item.kind === 'file')
+              .map(item => item.getAsFile());
+          }
 
           let handled = false;
-          for (const file of Array.from(files)) {
-            if (file.type.startsWith("image/")) {
-              event.preventDefault();
-
-              // CodeMirror natively gives us the exact text coordinate
+          filesToProcess.forEach(file => {
+            if (file && file.type.startsWith("image/")) {
+              // Calculate exact drop coordinates
               let posInfo = view.posAtCoords({ x: event.clientX, y: event.clientY });
               let pos = posInfo !== null ? posInfo.pos : view.state.doc.length;
+
+              // Failsafe bounds check
+              const maxPos = view.state.doc.length;
+              if (pos > maxPos) pos = maxPos;
+              if (pos < 0) pos = 0;
 
               uploadImage(file, view, pos);
               handled = true;
             }
-          }
+          });
           return handled;
         }
       })
@@ -230,16 +247,8 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
   }, [onLinkClick, onTagClick, onOpenTemplate, theme]);
 
   // --- HTML5 Drag and Drop Handlers ---
-  const handleDragEnter = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
   const handleDragOver = (e) => {
     e.preventDefault();
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'copy';
-    }
     setIsDragging(true);
   };
 
@@ -250,18 +259,18 @@ export default function Editor({ content, onChange, onLinkClick, onTagClick, onO
     }
   };
 
-  const handleDropContainer = (e) => {
-    // Just clear the visual overlay. CodeMirror's native drop handler processes the file!
+  const handleDrop = (e) => {
+    // Just turn off the blue overlay.
+    // CodeMirror handles the actual file insertion natively now!
     setIsDragging(false);
   };
 
   return (
     <div
       className="h-full relative group"
-      onDragEnter={handleDragEnter}
       onDragOverCapture={handleDragOver}
       onDragLeaveCapture={handleDragLeave}
-      onDrop={handleDropContainer}
+      onDropCapture={handleDrop}
     >
       {/* Visual Overlay shown during drag */}
       {isDragging && (
